@@ -5,11 +5,15 @@
   vars:
     project_dir: /opt/saas-subscription-lifecycle
     docker_apt_arch: "{{ 'amd64' if ansible_architecture in ['x86_64', 'amd64'] else 'arm64' }}"
+    repo_url: https://github.com/kngsoomin/saas-subscription-lifecycle.git
+    repo_version: main
+    force_redeploy: false
   tasks:
     - name: Update apt cache and install base packages
       ansible.builtin.apt:
         update_cache: yes
         name:
+          - git
           - ca-certificates
           - curl
           - gnupg
@@ -57,13 +61,48 @@
         groups: docker
         append: true
 
-    - name: Create deployment target directory
+    - name: Check if project_dir exists
+      ansible.builtin.stat:
+        path: "{{ project_dir }}"
+      register: project_dir_stat
+
+    - name: Check if project_dir is a git repo
+      ansible.builtin.stat:
+        path: "{{ project_dir }}/.git"
+      register: project_git_stat
+      when: project_dir_stat.stat.exists
+
+    - name: Remove project_dir if force_redeploy=true
+      ansible.builtin.file:
+        path: "{{ project_dir }}"
+        state: absent
+      when: force_redeploy | bool
+
+    - name: Remove non-git directory blocking clone
+      ansible.builtin.file:
+        path: "{{ project_dir }}"
+        state: absent
+      when:
+        - project_dir_stat.stat.exists
+        - not project_git_stat.stat.exists
+        - not force_redeploy | bool
+
+    - name: Ensure project directory exists
       ansible.builtin.file:
         path: "{{ project_dir }}"
         state: directory
         owner: ubuntu
         group: ubuntu
         mode: "0755"
+
+    - name: Checkout repository
+      ansible.builtin.git:
+        repo: "{{ repo_url }}"
+        dest: "{{ project_dir }}"
+        version: "{{ repo_version }}"
+        update: yes
+        force: yes
+      become_user: ubuntu
 
     - name: Ensure runtime subdirectories exist (logs/dags/plugins)
       ansible.builtin.file:

@@ -35,10 +35,12 @@ services:
     command: webserver
     ports:
       - "8080:8080"
+    restart: unless-stopped
 
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
+    restart: unless-stopped
 
 volumes:
   postgres-db-volume:

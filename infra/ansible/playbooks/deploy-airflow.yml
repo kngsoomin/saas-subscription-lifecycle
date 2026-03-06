@@ -1,0 +1,48 @@
+---
+- name: Deploy Airflow (Docker Compose)
+  hosts: airflow
+  become: true
+  vars:
+    project_dir: /opt/saas-subscription-lifecycle
+    compose_file: docker-compose.airflow.yml
+    airflow_admin_user: admin
+    airflow_admin_pass: ChangeMe123!
+    airflow_admin_email: admin@example.com
+
+  tasks:
+    - name: Bring up Postgres first
+      ansible.builtin.shell: docker compose -f {{ compose_file }} up -d postgres
+      args:
+        chdir: "{{ project_dir }}"
+
+    - name: Wait for Postgres to be ready
+      ansible.builtin.shell: docker compose -f {{ compose_file }} exec -T postgres pg_isready -U airflow
+      args:
+        chdir: "{{ project_dir }}"
+      register: pg_ready
+      retries: 30
+      delay: 2
+      until: pg_ready.rc == 0
+
+    - name: Run Airflow DB migrations (idempotent)
+      ansible.builtin.shell: docker compose -f {{ compose_file }} run --rm airflow-webserver airflow db migrate
+      args:
+        chdir: "{{ project_dir }}"
+
+    - name: Create admin user if not exists (idempotent)
+      ansible.builtin.shell: |
+        set -e
+        docker compose -f {{ compose_file }} run --rm airflow-webserver airflow users list | grep -q '^{{ airflow_admin_user }}\b' \
+        || docker compose -f {{ compose_file }} run --rm airflow-webserver airflow users create \
+            --username {{ airflow_admin_user }} \
+            --firstname Admin --lastname User \
+            --role Admin \
+            --email {{ airflow_admin_email }} \
+            --password '{{ airflow_admin_pass }}'
+      args:
+        chdir: "{{ project_dir }}"
+
+    - name: Bring up Airflow webserver + scheduler
+      ansible.builtin.shell: docker compose -f {{ compose_file }} up -d airflow-webserver airflow-scheduler
+      args:
+        chdir: "{{ project_dir }}"

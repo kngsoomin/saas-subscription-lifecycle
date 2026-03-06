@@ -1,0 +1,33 @@
+name: Deploy Airflow (EC2)
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "dags/**"
+      - "plugins/**"
+      - "src/**"
+      - "docker-compose.airflow.yml"
+      - "infra/ansible/**"
+      - ".github/workflows/deploy-airflow.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            set -euo pipefail
+            cd /opt/saas-subscription-lifecycle
+            git fetch --all
+            git reset --hard origin/main
+            cd infra/ansible
+            ansible-playbook playbooks/deploy-airflow.yml
+            
+            # TODO: add secrets to github
