@@ -1,48 +1,58 @@
 ---
-- name: Deploy Airflow (Docker Compose)
+- name: Deploy Airflow (repeatable)
   hosts: airflow
   become: true
+
   vars:
     project_dir: /opt/saas-subscription-lifecycle
     compose_file: docker-compose.airflow.yml
-    airflow_admin_user: admin
-    airflow_admin_pass: ChangeMe123!
-    airflow_admin_email: admin@example.com
+    repo_url: https://github.com/kngsoomin/saas-subscription-lifecycle.git
+    repo_version: main
 
   tasks:
-    - name: Bring up Postgres first
+    - name: Verify project directory exists
+      ansible.builtin.stat:
+        path: "{{ project_dir }}"
+      register: project_dir_stat
+
+    - name: Fail if project directory does not exist
+      ansible.builtin.fail:
+        msg: "Project directory does not exist: {{ project_dir }}. Run bootstrap.yml first."
+      when: not project_dir_stat.stat.exists
+
+    - name: Update repository on EC2
+      ansible.builtin.git:
+        repo: "{{ repo_url }}"
+        dest: "{{ project_dir }}"
+        version: "{{ repo_version }}"
+        update: yes
+        force: yes
+      become_user: ubuntu
+
+    - name: Validate docker compose config
+      ansible.builtin.shell: docker compose -f {{ compose_file }} config
+      args:
+        chdir: "{{ project_dir }}"
+      register: compose_config
+      changed_when: false
+
+    - name: Ensure Postgres is up
       ansible.builtin.shell: docker compose -f {{ compose_file }} up -d postgres
       args:
         chdir: "{{ project_dir }}"
 
-    - name: Wait for Postgres to be ready
-      ansible.builtin.shell: docker compose -f {{ compose_file }} exec -T postgres pg_isready -U airflow
-      args:
-        chdir: "{{ project_dir }}"
-      register: pg_ready
-      retries: 30
-      delay: 2
-      until: pg_ready.rc == 0
-
-    - name: Run Airflow DB migrations (idempotent)
-      ansible.builtin.shell: docker compose -f {{ compose_file }} run --rm airflow-webserver airflow db migrate
-      args:
-        chdir: "{{ project_dir }}"
-
-    - name: Create admin user if not exists (idempotent)
-      ansible.builtin.shell: |
-        set -e
-        docker compose -f {{ compose_file }} run --rm airflow-webserver airflow users list | grep -q '^{{ airflow_admin_user }}\b' \
-        || docker compose -f {{ compose_file }} run --rm airflow-webserver airflow users create \
-            --username {{ airflow_admin_user }} \
-            --firstname Admin --lastname User \
-            --role Admin \
-            --email {{ airflow_admin_email }} \
-            --password '{{ airflow_admin_pass }}'
-      args:
-        chdir: "{{ project_dir }}"
-
-    - name: Bring up Airflow webserver + scheduler
+    - name: Ensure Airflow webserver and scheduler are up
       ansible.builtin.shell: docker compose -f {{ compose_file }} up -d airflow-webserver airflow-scheduler
       args:
         chdir: "{{ project_dir }}"
+
+    - name: Show running containers
+      ansible.builtin.shell: docker compose -f {{ compose_file }} ps
+      args:
+        chdir: "{{ project_dir }}"
+      register: ps_out
+      changed_when: false
+
+    - name: Print docker compose ps
+      ansible.builtin.debug:
+        var: ps_out.stdout_lines

@@ -45,3 +45,7 @@ flowchart LR
 | Storage | gp3 - 50GB |
 | IAM Role | EC2 Instance Profile with scoped S3 read/write access (bronze/silver/gold prefixes) |
 | Runtime | Docker + Docker Compose (Airflow Webserver, Scheduler, Postgres) |
+
+- `bootstrap.yml`: one-time host provisioning → .env 생성
+- `init-airflow.yml`: one-time Airflow initialization (DB migration + admin user setup) → db migrate, admin 생성
+- `deploy-airflow.yml`: repeatable Airflow deployment triggered by GitHub Actions → repo update, airflow 서비스 up

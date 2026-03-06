@@ -1,5 +1,5 @@
 ---
-- name: Bootstrap EC2 for Airflow (Docker + Compose + dirs)
+- name: Bootstrap EC2 (Docker + Compose + dirs)
   hosts: airflow
   become: true
   vars:
