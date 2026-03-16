@@ -3,7 +3,7 @@
 **Goal**
 - infrastructure automation with Ansible
 - workflow orchestration with Airflow
-- CI/CD with Github Actions
+- CI/CD with GitHub Actions
 - medallion data modeling
 - extension with Kafka-based streaming ingestion
 
@@ -25,10 +25,10 @@ Checklist:
   - [x] docker compose for airflow installation
   - [x] prepare playbook that install docker & git and create project directory; clone git repo; create `.env`
   - [x] prepare playbook that initializes airflow with docker-compose
-  - [x] prepare playbook that deploys airflow, and trigger it by github actions (needs to set up github secrets for SSH key)
+  - [x] prepare playbook that deploys airflow, and trigger it by GitHub actions (needs to set up GitHub secrets for SSH key)
 - Scripts
-  - [ ] event schema design, event types definition, partition/folder convention
-  - [ ] mock events random generator
+  - [x] event schema design, event types definition, partition/folder convention
+  - [x] mock events random generator
   - [ ] dag for bronze: raw mock events as ingested; output JSONL partitioned by date
   - [ ] dag for silver: cleaned and standardized subscription state/history tables; output `subscription_state_history` & `subscription_state_current`
   - [ ] dag for gold: business-ready kpi marts - like daily active subscriptions, cancellations, etc.; output `kpi_daily`
@@ -118,7 +118,6 @@ fields:
     required: true
     allowed_values:
       - monthly
-      - annual
 
   - name: price
     type: float
@@ -172,6 +171,12 @@ fields:
   "ingested_at": "2026-03-15T14:05:25Z"
 }
 ```
+plan catalog
+```
+basic_monthly
+pro_monthly
+enterprise_monthly
+```
 
 | event_type              | status      |
 | ---------------------   | --------    |
@@ -181,3 +186,74 @@ fields:
 | subscription_downgraded | active      |
 | subscription_cancelled  | cancelled   |
 | payment_failed          | past_due    |
+
+#### partition/folder convention
+```
+data/
+  bronze/
+    subscription_events/
+      dt=YYYY-MM-DD/
+        subscription_events_<run_ts>.jsonl
+
+  silver/
+    subscription_state_history/
+      dt=YYYY-MM-DD/
+        part-000.parquet
+
+    subscription_state_current/
+      snapshot_date=YYYY-MM-DD/
+        part-000.parquet
+
+  gold/
+    kpi_daily/
+      dt=YYYY-MM-DD/
+        part-000.parquet
+
+  state/
+    generator/
+      subscription_state_current.json
+      last_subscription_seq.txt
+
+```
+Silver - subscription_state_history
+```
+subscription_id
+user_id
+event_id
+event_time
+event_type
+plan_id
+billing_cycle
+price
+currency
+status
+source
+```
+Silver - subscription_state_current
+```
+subscription_id
+user_id
+current_plan_id
+current_billing_cycle
+current_price
+currency
+current_status
+last_event_type
+last_event_time
+```
+Gold - kpi_daily
+```
+date
+new_subscriptions
+cancellations
+active_subscriptions
+mrr
+```
+#### mock event generator
+generate_mock_events(n_subscriptions=10)
+
+for each subscription
+    create subscription_created event
+    generate 0~4 follow-up events
+    update subscription state each time
+
