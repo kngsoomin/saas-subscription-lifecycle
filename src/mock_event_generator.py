@@ -219,8 +219,8 @@ def generate_followup_event(
 
 def generate_mock_events(
         *,
-        state_path: str = "data/state/generator/subscription_state_current.json",
-        seq_path: str = "data/state/generator/last_subscription_seq.txt",
+        state_path: str = "/opt/project/data/state/generator/subscription_state_current.json",
+        seq_path: str = "/opt/project/data/state/generator/last_subscription_seq.txt",
         new_subscription_range: tuple[int, int] = (2, 3),
         max_existing_updates: int = 5,
     ) -> List[dict]:
