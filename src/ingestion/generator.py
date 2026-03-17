@@ -38,7 +38,7 @@ def utc_now() -> datetime:
 
 
 def format_utc_datetime(dt: datetime) -> str:
-    return dt.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def parse_utc_datetime(value: str) -> datetime:

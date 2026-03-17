@@ -29,18 +29,32 @@ Checklist:
 - Scripts
   - [x] event schema design, event types definition, partition/folder convention
   - [x] mock events random generator
-  - [ ] dag for bronze: raw mock events as ingested; output JSONL partitioned by date
-  - [ ] dag for silver: cleaned and standardized subscription state/history tables; output `subscription_state_history` & `subscription_state_current`
+  - [x] dag for bronze: raw mock events as ingested; output JSONL partitioned by date
+  - [x] dag for silver: cleaned and standardized subscription state/history tables; output `subscription_state_history` & `subscription_state_current`
+    - for now use pandas for deduplication; later replace with Iceberg
   - [ ] dag for gold: business-ready kpi marts - like daily active subscriptions, cancellations, etc.; output `kpi_daily`
 
 #### Phase 2: Upgrade to Cloud data lake
 
 - [ ] replace local filesystem with s3-based storage
+- [ ] use Iceberg for silver layer
 - [ ] store sivler/gold in Parquet
-- [ ] add testing / validation (tbc)
+- [ ] strengthen schema validation and data quality with better tests.. pydantic
 
 #### Phase 3: streaming extension for real-time ingestion
-
+```
+Event Generator
+      ↓
+Kafka
+      ↓
+Spark Streaming
+      ↓
+S3 Bronze
+      ↓
+Airflow batch
+      ↓
+Silver / Gold
+```
 tbu
 - provision separate EC2 for kafka broker
 - publish mock events to Kafka

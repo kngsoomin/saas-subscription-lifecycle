@@ -1,7 +1,7 @@
 import logging
 
-from mock_event_generator import generate_mock_events
-from bronze_writer import write_bronze_events
+from src.ingestion.generator import generate_mock_events
+from src.ingestion.bronze_writer import write_bronze_events
 
 logging.basicConfig(
     level=logging.INFO,
