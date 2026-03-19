@@ -87,7 +87,7 @@ with minimal changes to the core data model and storage layout.
 - Introduce schema validation layer 
 - Add data quality checks and monitoring
 
-### Phase 3 (Streaming & Real-time Processing)
+### Phase 3 - Streaming & Real-time Processing
 - Introduce Kafka-based event ingestion
 - Build streaming pipeline with Spark Structured Streaming
 - Transition to table formats like Apache Iceberg
