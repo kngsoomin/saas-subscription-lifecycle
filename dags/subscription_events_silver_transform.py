@@ -5,6 +5,7 @@ from datetime import datetime
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
 from src.silver.transform import (
     read_bronze_incremental,
@@ -18,6 +19,7 @@ from src.silver.watermark import load_watermark, save_watermark
 logger = logging.getLogger(__name__)
 
 PIPELINE_NAME = "subscription_events_silver_transform"
+GOLD_KPI_DAILY_DAG_ID = "subscription_events_gold_kpi_daily"
 
 
 def transform_bronze_to_silver() -> None:
@@ -63,3 +65,10 @@ with DAG(
         task_id="transform_bronze_to_silver",
         python_callable=transform_bronze_to_silver,
     )
+
+    trigger_gold_kpi_daily_task = TriggerDagRunOperator(
+        task_id="trigger_gold_kpi_daily",
+        trigger_dag_id=GOLD_KPI_DAILY_DAG_ID
+    )
+
+    transform_bronze_to_silver_task >> trigger_gold_kpi_daily_task
