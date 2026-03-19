@@ -1,6 +1,6 @@
 # SaaS Subscription Lifecycle Data Platform
 
-This project builds an event-driven data platform that simulates subscription lifecycle events, 
+This project builds an event-driven data platform that models subscription lifecycle events, 
 ingests them into a medallion architecture, and incrementally transforms them into reliable analytical datasets.
 
 It starts as a batch-based pipeline orchestrated with Airflow 
@@ -22,6 +22,8 @@ with minimal changes to the core data model and storage layout.
 
 ### Data Flow (Phase 1)
 
+The platform processes subscription lifecycle events through a layered medallion architecture using an incremental, state-aware pipeline.
+
 1. **Source (Event Generation)**
    - Mock event generator simulates subscription lifecycle events
 2. **Ingestion (Airflow)**
@@ -32,17 +34,30 @@ with minimal changes to the core data model and storage layout.
 4. **Processing (Airflow)**
    - Incremental Bronze → Silver transformation
      - Builds:
-       - Silver History: append-only event log
-       - Silver Current: latest subscription snapshot
+       - Silver History
+         - Events are transformed into a canonical subscription state history, deduplicated using `event_id` for idempotency
+         - State is reconstructed by ordering events using `event_time` and `ingested_at`
+         - Data is stored as **partitioned Parquet files (`dt=YYYY-MM-DD`)**
+         - Only **affected partitions are re-written**
+       - Silver Current
+         - A latest subscription snapshot is derived from the full history table
+         - For each `subscription_id`, the most recent event is selected
+         - This table represents the **current state of all subscriptions**
 5. **Serving (Gold Layer)**
-   - Aggregated business metrics (e.g., MRR, churn, active users)
-   - Designed for downstream analytics / dashboards
+   - Daily KPIs are derived from event-driven state reconstruction (history table)
+     - `new_subscriptions`, `new_cancellations`, `MRR`
+   - Incremental logic:
+     - New data is detected via `ingested_at` watermark
+     - The earliest affected `event_date` is identified
+     - KPIs are recomputed **only from that date onward**
+   - Results are stored as partitioned Parquet (`dt=YYYY-MM-DD`)
+
 
 ![Development & Deployment](docs/architecture/development-deployment-architecture.png)
 
 ### Development & Deployment
 - **Code Versioning (GitHub)**
-- **CI/CD Pipeline (GitHub Acrionts)**
+- **CI/CD Pipeline (GitHub Actions)**
 - **Infrastructure (AWS EC2)**
   - Compute layer hosting the data platform
 - **Configuration (Ansible)**
@@ -55,29 +70,31 @@ with minimal changes to the core data model and storage layout.
 
 ## Key Decisions
 
-- Designed a **stateful event generator**
-    
-    → simulates realistic lifecycle transitions and uncovers edge cases beyond predefined tests
+### 1. **A stateful event generator**
+- The event generator maintains lifecycle state and produces only allowed next actions
+- This moves beyond predefined test cases and helps uncover unexpected edge scenarios
 
-- Used **`ingested_at` as watermark**
+### 2. Incremental Processing via Watermarks
+- All layers process data incrementally using an `ingested_at` watermark
+- Enables efficient updates without full recomputation
 
-    → aligns with ingestion semantics and prevents missing late-arriving data
+### 3. Partition-Level Update & Partial Recompute
+- To build silver history only affected partitions are reloaded and overwritten
+- Gold KPIs are recomputed only from the earliest affected date
+- Balances correctness (late events) with efficiency (avoiding full rewrites)
+- Handles late-arriving events via partition-level recompute
 
-- Built **idempotent pipeline with event-level deduplication**
+### 4. Event-Sourced State Reconstruction
+- Subscription state is derived from event history, not stored directly
+- Ensures deterministic, reproducible state and supports late-arriving data
 
-    → ensures safe reprocessing and consistent outputs
+### 5. Idempotent Processing via Event Deduplication
+- Duplicate events are removed using `event_id`
+- Guarantees safe reprocessing and retry behavior
 
-- Modeled **current state as snapshot table**
-
-    → optimized for analytical queries and downstream consumption
-
-- Partitioned Bronze data by ingestion time
-
-    → enables efficient incremental processing and seamless transition to S3
-
-- Structured pipeline for **batch-to-streaming extensibility**
-
-    → minimal redesign required when introducing Kafka/Spark
+### 6. Batch-First, Streaming-Ready Design
+- Built with batch (Airflow + files) but mirrors streaming concepts
+- Designed for extension to Kafka/Spark without redesign
 
 
 ## Future Work
