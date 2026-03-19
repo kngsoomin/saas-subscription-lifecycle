@@ -7,7 +7,10 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 
 from src.silver.transform import (
-    read_bronze_incremental, build_history, build_current
+    read_bronze_incremental,
+    load_history,
+    update_history,
+    build_current
 )
 from src.silver.watermark import load_watermark, save_watermark
 
@@ -18,9 +21,11 @@ PIPELINE_NAME = "subscription_events_silver_transform"
 
 
 def transform_bronze_to_silver() -> None:
+    # load watermark
     last_watermark = load_watermark(pipeline_name=PIPELINE_NAME)
     logger.info(f"Loaded watermark: {last_watermark}")
 
+    # read bronze incremental
     new_events = read_bronze_incremental(last_watermark=last_watermark)
     logger.info(f"Read {len(new_events)} bronze events")
 
@@ -28,12 +33,16 @@ def transform_bronze_to_silver() -> None:
         logger.info(f"No new events found. Skipping silver update.")
         return
 
-    history_df = build_history(new_events=new_events)
-    logger.info(f"Built history with {len(history_df)} rows")
+    # update affected history partitions
+    updated_history_df = update_history(new_events=new_events)
+    logger.info(f"Built affected history rows: {len(updated_history_df)} rows")
 
-    current_df = build_current(history_df=history_df)
+    # load full history for current snapshot
+    full_history_df = load_history()
+    current_df = build_current(full_history_df=full_history_df)
     logger.info(f"Built current snapshot with {len(current_df)} rows")
 
+    # save watermark
     max_ingested_at = max(event["ingested_at"] for event in new_events)
     save_watermark(
         pipeline_name=PIPELINE_NAME,

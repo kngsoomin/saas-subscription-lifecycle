@@ -255,12 +255,23 @@ current_status
 last_event_type
 last_event_time
 ```
-Gold - kpi_daily
+Gold - kpi_daily 
+explicitly separated into flow metrics (event-based; `new_*`) and stock metrics (state-based snapshots)
+flow metrics : new_subscriptions, new_cancellations
+stock metrics: active_subscriptions, mrr
+
+new bronze → silver incremental
+→ detect affected date range
+→ rebuild kpi_daily for that range
+→ overwrite partitions
+→ update watermark
 ```
 date
 new_subscriptions
-cancellations
+new_cancellations
 active_subscriptions
 mrr
+snapshot_time
+currency
 ```
 

@@ -1,7 +1,8 @@
 from src.silver.transform import (
     read_bronze_incremental,
-    build_history,
+    update_history,
     build_current,
+    load_history
 )
 from src.silver.watermark import load_watermark, save_watermark
 
@@ -31,18 +32,21 @@ def run_test():
         return
 
     # 3. build history
-    history_df = build_history(
+    updated_history_df = update_history(
         new_events=events,
         base_dir="data/silver/subscription_state_history"
     )
-    print(f"History rows: {len(history_df)}")
+    print(f"Updated history rows: {len(updated_history_df)}")
 
     # 4. build current
+    full_history_df = load_history(
+        base_dir="data/silver/subscription_state_history"
+    )
     current_df = build_current(
-        history_df=history_df,
+        full_history_df=full_history_df,
         base_dir="data/silver/subscription_state_current"
     )
-    print(f"Current rows: {len(current_df)}")
+    print(f"Current snapshot rows: {len(current_df)}")
 
     # 5. update watermark
     max_ingested_at = max(e["ingested_at"] for e in events)
