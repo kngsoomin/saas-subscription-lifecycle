@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Dict, List
 from uuid import uuid4
 
+from src.common.constants import DEFAULT_GENERATOR_SEQ_PATH, DEFAULT_GENERATOR_STATE_CURRENT_PATH
+
 
 PLAN_CATALOG = {
     "basic_monthly": {"billing_cycle": "monthly", "price": 9.99},
@@ -219,8 +221,8 @@ def generate_followup_event(
 
 def generate_mock_events(
         *,
-        state_path: str = "/opt/project/data/state/generator/subscription_state_current.json",
-        seq_path: str = "/opt/project/data/state/generator/last_subscription_seq.txt",
+        state_path: str = DEFAULT_GENERATOR_STATE_CURRENT_PATH,
+        seq_path: str = DEFAULT_GENERATOR_SEQ_PATH,
         new_subscription_range: tuple[int, int] = (2, 3),
         max_existing_updates: int = 5,
     ) -> List[dict]:

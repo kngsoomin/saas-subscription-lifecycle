@@ -10,7 +10,7 @@ from src.silver.watermark import load_watermark, save_watermark
 PIPELINE_NAME = "test_silver_pipeline"
 
 
-def run_test():
+def main():
     print("=== SILVER PIPELINE TEST START ===")
 
     # 1. load watermark
@@ -66,4 +66,4 @@ def run_test():
 
 
 if __name__ == "__main__":
-    run_test()
+    main()

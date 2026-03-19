@@ -7,7 +7,12 @@ from datetime import datetime, timezone
 
 from src.silver.transform import load_history
 from src.silver.watermark import save_watermark, load_watermark
-
+from src.common.constants import (
+    DEFAULT_SILVER_HISTORY_DIR,
+    DEFAULT_SILVER_CURRENT_PATH,
+    DEFAULT_GOLD_KPI_DAILY_DIR,
+    DEFAULT_PIPELINE_STATE_DIR,
+)
 
 KPI_DAILY_COLUMNS = [
     "date",
@@ -22,7 +27,7 @@ KPI_DAILY_COLUMNS = [
 
 def load_gold_inputs(
     last_watermark: str | None,
-    silver_history_path: str = "/opt/project/data/silver/subscription_state_history",
+    silver_history_path: str = DEFAULT_SILVER_HISTORY_DIR,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
 
     history_df = load_history(base_dir=silver_history_path)
@@ -112,7 +117,7 @@ def build_kpi_daily_df(
 
 def write_kpi_daily_partitions(
     kpi_df: pd.DataFrame,
-    base_dir: str = "/opt/project/data/gold/kpi_daily",
+    base_dir: str = DEFAULT_GOLD_KPI_DAILY_DIR,
 ) -> None:
     if kpi_df.empty:
         return
@@ -130,7 +135,7 @@ def write_kpi_daily_partitions(
 
 def validate_latest_kpi_with_current(
     kpi_df: pd.DataFrame,
-    current_snapshot_path: str = "/opt/project/data/silver/subscription_state_current/current.parquet",
+    current_snapshot_path: str = DEFAULT_SILVER_CURRENT_PATH,
 ) -> dict:
     current_file = Path(current_snapshot_path)
 
@@ -179,7 +184,7 @@ def validate_latest_kpi_with_current(
 def update_gold_watermark(
     incremental_df: pd.DataFrame,
     pipeline_name: str,
-    state_base_dir: str = "/opt/project/data/state/pipeline",
+    state_base_dir: str = DEFAULT_PIPELINE_STATE_DIR,
 ) -> None:
     if incremental_df.empty:
         return

@@ -6,11 +6,9 @@ from airflow.operators.python import PythonOperator
 
 from src.ingestion.generator import generate_mock_events
 from src.ingestion.bronze_writer import write_bronze_events
-
+from src.common.constants import BRONZE_DAG_ID
 
 logger = logging.getLogger(__name__)
-
-PIPELINE_NAME = "subscription_events_bronze_ingestion"
 
 
 def generate_and_write_bronze() -> None:
@@ -24,7 +22,7 @@ def generate_and_write_bronze() -> None:
         logger.info("Sample event: %s", events[0])
 
 with DAG(
-    dag_id=PIPELINE_NAME,
+    dag_id=BRONZE_DAG_ID,
     start_date=datetime(2026, 3, 1),
     schedule="@hourly",
     catchup=False,

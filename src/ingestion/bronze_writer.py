@@ -3,10 +3,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict
 
+from src.common.constants import DEFAULT_BRONZE_BASE_DIR
+
 
 def build_bronze_output_path(
     *,
-    base_dir: str = "/opt/project/data/bronze/subscription_events",
+    base_dir: str = DEFAULT_BRONZE_BASE_DIR,
     runtime: datetime | None = None,
 ):
     runtime = runtime or datetime.now(timezone.utc)
@@ -31,7 +33,7 @@ def write_events_to_jsonl(
 def write_bronze_events(
     *,
     events: List[Dict],
-    base_dir: str = "/opt/project/data/bronze/subscription_events",
+    base_dir: str = DEFAULT_BRONZE_BASE_DIR,
     runtime: datetime | None = None,
 ) -> Path:
     output_path = build_bronze_output_path(

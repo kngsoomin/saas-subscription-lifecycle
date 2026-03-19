@@ -7,6 +7,7 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
+from src.common.constants import SILVER_DAG_ID, GOLD_KPI_DAILY_DAG_ID
 from src.silver.transform import (
     read_bronze_incremental,
     load_history,
@@ -18,13 +19,10 @@ from src.silver.watermark import load_watermark, save_watermark
 
 logger = logging.getLogger(__name__)
 
-PIPELINE_NAME = "subscription_events_silver_transform"
-GOLD_KPI_DAILY_DAG_ID = "subscription_events_gold_kpi_daily"
-
 
 def transform_bronze_to_silver() -> None:
     # load watermark
-    last_watermark = load_watermark(pipeline_name=PIPELINE_NAME)
+    last_watermark = load_watermark(pipeline_name=SILVER_DAG_ID)
     logger.info(f"Loaded watermark: {last_watermark}")
 
     # read bronze incremental
@@ -47,14 +45,14 @@ def transform_bronze_to_silver() -> None:
     # save watermark
     max_ingested_at = max(event["ingested_at"] for event in new_events)
     save_watermark(
-        pipeline_name=PIPELINE_NAME,
+        pipeline_name=SILVER_DAG_ID,
         last_processed_ingested_at=max_ingested_at,
     )
     logger.info(f"Saved watermark: {max_ingested_at}")
 
 
 with DAG(
-    dag_id=PIPELINE_NAME,
+    dag_id=SILVER_DAG_ID,
     start_date=datetime(2026,3,1),
     schedule_interval="@hourly",
     catchup=False,

@@ -15,16 +15,15 @@ from src.gold.kpi_daily import (
     update_gold_watermark,
 )
 from src.silver.watermark import load_watermark
+from src.common.constants import GOLD_KPI_DAILY_DAG_ID
 
 
 logger = logging.getLogger(__name__)
 
-PIPELINE_NAME = "subscription_events_gold_kpi_daily"
-
 
 def update_gold_kpi_daily() -> None:
     # load last watermark
-    last_watermark = load_watermark(pipeline_name=PIPELINE_NAME)
+    last_watermark = load_watermark(pipeline_name=GOLD_KPI_DAILY_DAG_ID)
     logger.info("Loaded gold watermark: %s", last_watermark)
 
     # load original kpi df and newly updated df
@@ -62,13 +61,13 @@ def update_gold_kpi_daily() -> None:
     # update watermark
     update_gold_watermark(
         incremental_df=incremental_df,
-        pipeline_name=PIPELINE_NAME,
+        pipeline_name=GOLD_KPI_DAILY_DAG_ID,
     )
     logger.info("Updated gold watermark.")
 
 
 with DAG(
-    dag_id=PIPELINE_NAME,
+    dag_id=GOLD_KPI_DAILY_DAG_ID,
     start_date=datetime(2026, 3, 1),
     schedule="@hourly",
     catchup=False,

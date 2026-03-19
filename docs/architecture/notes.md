@@ -32,7 +32,8 @@ Checklist:
   - [x] dag for bronze: raw mock events as ingested; output JSONL partitioned by date
   - [x] dag for silver: cleaned and standardized subscription state/history tables; output `subscription_state_history` & `subscription_state_current`
     - for now use pandas for deduplication; later replace with Iceberg
-  - [ ] dag for gold: business-ready kpi marts - like daily active subscriptions, cancellations, etc.; output `kpi_daily`
+  - [x] dag for gold: business-ready kpi marts - like daily active subscriptions, cancellations, etc.; output `kpi_daily`
+  - 🎉
 
 #### Phase 2: Upgrade to Cloud data lake
 

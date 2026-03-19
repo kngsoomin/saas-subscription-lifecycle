@@ -4,10 +4,16 @@ from pathlib import Path
 from typing import Dict, List
 from datetime import datetime, timezone
 
+from src.common.constants import (
+    DEFAULT_BRONZE_BASE_DIR,
+    DEFAULT_SILVER_HISTORY_DIR,
+    DEFAULT_SILVER_CURRENT_DIR
+)
+
 
 def read_bronze_incremental(
     last_watermark: str | None,
-    base_dir: str="/opt/project/data/bronze/subscription_events",
+    base_dir: str=DEFAULT_BRONZE_BASE_DIR,
 ) -> List[Dict]:
     base_path = Path(base_dir)
 
@@ -44,7 +50,7 @@ def read_bronze_incremental(
 
 def load_history_partitions(
     dates: list[str],
-    base_dir: str = "/opt/project/data/silver/subscription_state_history",
+    base_dir: str = DEFAULT_SILVER_HISTORY_DIR,
 ) -> pd.DataFrame:
 
     base_path = Path(base_dir)
@@ -69,7 +75,7 @@ def load_history_partitions(
 
 
 def load_history(
-    base_dir: str = "/opt/project/data/silver/subscription_state_history",
+    base_dir: str = DEFAULT_SILVER_HISTORY_DIR,
 ) -> pd.DataFrame:
     base_path = Path(base_dir)
     files = sorted(base_path.glob("dt=*/part-*.parquet"))
@@ -100,7 +106,7 @@ def load_history(
 
 def update_history(
     new_events: List[Dict],
-    base_dir: str="/opt/project/data/silver/subscription_state_history",
+    base_dir: str = DEFAULT_SILVER_HISTORY_DIR,
 ) -> pd.DataFrame:
 
     base_path = Path(base_dir)
@@ -154,7 +160,7 @@ def update_history(
 
 def build_current(
     full_history_df: pd.DataFrame,
-    base_dir: str="/opt/project/data/silver/subscription_state_current",
+    base_dir: str = DEFAULT_SILVER_CURRENT_DIR,
     runtime: datetime | None = None,
 ) -> pd.DataFrame:
 

@@ -1,10 +1,12 @@
 import json
 from pathlib import Path
 
+from src.common.constants import DEFAULT_PIPELINE_STATE_DIR
+
 
 def load_watermark(
     pipeline_name: str,
-    base_dir: str = "/opt/project/data/state/pipeline",
+    base_dir: str = DEFAULT_PIPELINE_STATE_DIR,
 ) -> str | None:
     path = Path(base_dir) / "watermark.json"
     if not path.exists():
@@ -16,7 +18,7 @@ def load_watermark(
 def save_watermark(
     pipeline_name: str,
     last_processed_ingested_at: str,
-    base_dir: str = "/opt/project/data/state/pipeline",
+    base_dir: str = DEFAULT_PIPELINE_STATE_DIR,
 ) -> None:
     path = Path(base_dir) / "watermark.json"
     path.parent.mkdir(parents=True, exist_ok=True)
