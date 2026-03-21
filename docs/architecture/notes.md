@@ -37,10 +37,13 @@ Checklist:
 
 #### Phase 2: Upgrade to Cloud data lake
 
-- [ ] replace local filesystem with s3-based storage
-- [ ] use Iceberg for silver layer
-- [ ] store sivler/gold in Parquet
-- [ ] strengthen schema validation and data quality with better tests.. pydantic
+- [ ] path/config abstraction
+- [ ] local/s3 configurable
+- [ ] bronze <-> s3
+- [ ] schema validation with pydantic
+- [ ] invalid event ?
+- [ ] enhance data quality check
+- ...
 
 #### Phase 3: streaming extension for real-time ingestion
 ```
@@ -276,3 +279,4 @@ snapshot_time
 currency
 ```
 
+프로덕션이면 ec2 를 두개 둘텐데

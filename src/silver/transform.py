@@ -9,14 +9,15 @@ from src.common.constants import (
     DEFAULT_SILVER_HISTORY_DIR,
     DEFAULT_SILVER_CURRENT_DIR
 )
+from src.common.storage import LocalStorage
 
 
 def read_bronze_incremental(
     last_watermark: str | None,
     base_dir: str=DEFAULT_BRONZE_BASE_DIR,
 ) -> List[Dict]:
-    base_path = Path(base_dir)
 
+    storage = LocalStorage()
     events: List[Dict] = []
 
     watermark_dt = (
@@ -24,17 +25,17 @@ def read_bronze_incremental(
         if last_watermark else None
     )
 
-    # for faster filtering
+    # faster filtering
     watermark_date = watermark_dt.date() if watermark_dt else None
 
-    for dt_path in base_path.glob("dt=*"):
+    for dt_path in storage.list_paths(base_dir, "dt=*"):
         dt_str = dt_path.name.split("=")[1]
         dt_date = datetime.strptime(dt_str, "%Y-%m-%d").date()
 
         if watermark_date and dt_date < watermark_date:
             continue
 
-        for file_path in dt_path.glob("*.jsonl"):
+        for file_path in storage.list_paths(base_dir, "*.jsonl"):
             with file_path.open() as f:
                 for line in f:
                     event = json.loads(line)
@@ -77,8 +78,8 @@ def load_history_partitions(
 def load_history(
     base_dir: str = DEFAULT_SILVER_HISTORY_DIR,
 ) -> pd.DataFrame:
-    base_path = Path(base_dir)
-    files = sorted(base_path.glob("dt=*/part-*.parquet"))
+    storage = LocalStorage()
+    files = sorted(storage.list_paths(base_dir, "dt=*/part-*.parquet"))
 
     if not files:
         return pd.DataFrame()
