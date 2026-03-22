@@ -1,30 +1,36 @@
 import json
-from pathlib import Path
 
 from src.common.constants import DEFAULT_PIPELINE_STATE_DIR
+from src.common.storage import LocalStorage
 
 
 def load_watermark(
     pipeline_name: str,
     base_dir: str = DEFAULT_PIPELINE_STATE_DIR,
+    storage: LocalStorage | None = None,
 ) -> str | None:
-    path = Path(base_dir) / "watermark.json"
-    if not path.exists():
+    storage = storage or LocalStorage()
+    path = storage.join(base_dir, "watermark.json")
+    if not storage.exists(path):
         return None
 
-    payload = json.loads(path.read_text())
+    with storage.open_text_read(path) as f:
+        payload = json.load(f)
+
     return payload.get(pipeline_name, {}).get("last_processed_ingested_at")
 
 def save_watermark(
     pipeline_name: str,
     last_processed_ingested_at: str,
     base_dir: str = DEFAULT_PIPELINE_STATE_DIR,
+    storage: LocalStorage | None = None,
 ) -> None:
-    path = Path(base_dir) / "watermark.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
+    storage = storage or LocalStorage()
+    path = storage.join(base_dir, "watermark.json")
 
-    if path.exists():
-        payload = json.loads(path.read_text())
+    if storage.exists(path):
+        with storage.open_text_read(path) as f:
+            payload = json.load(f)
     else:
         payload = {}
 
@@ -32,4 +38,5 @@ def save_watermark(
         "last_processed_ingested_at": last_processed_ingested_at,
     }
 
-    path.write_text(json.dumps(payload, indent=2))
+    with storage.open_text_write(path) as f:
+        json.dump(payload, f, indent=2)
