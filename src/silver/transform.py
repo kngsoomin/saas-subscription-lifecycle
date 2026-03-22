@@ -1,6 +1,5 @@
 import json
 import pandas as pd
-from pathlib import Path
 from typing import Dict, List
 from datetime import datetime, timezone
 
@@ -15,9 +14,10 @@ from src.common.storage import LocalStorage
 def read_bronze_incremental(
     last_watermark: str | None,
     base_dir: str=DEFAULT_BRONZE_BASE_DIR,
+    storage: LocalStorage | None=None,
 ) -> List[Dict]:
 
-    storage = LocalStorage()
+    storage = storage or LocalStorage()
     events: List[Dict] = []
 
     watermark_dt = (
@@ -29,14 +29,14 @@ def read_bronze_incremental(
     watermark_date = watermark_dt.date() if watermark_dt else None
 
     for dt_path in storage.list_paths(base_dir, "dt=*"):
-        dt_str = dt_path.name.split("=")[1]
+        dt_str = storage.basename(dt_path).split("=")[1]
         dt_date = datetime.strptime(dt_str, "%Y-%m-%d").date()
 
         if watermark_date and dt_date < watermark_date:
             continue
 
-        for file_path in storage.list_paths(base_dir, "*.jsonl"):
-            with file_path.open() as f:
+        for file_path in storage.list_paths(dt_path, "*.jsonl"):
+            with storage.open_text_read(file_path) as f:
                 for line in f:
                     event = json.loads(line)
                     ingested_at = datetime.fromisoformat(
@@ -52,14 +52,15 @@ def read_bronze_incremental(
 def load_history_partitions(
     dates: list[str],
     base_dir: str = DEFAULT_SILVER_HISTORY_DIR,
+    storage: LocalStorage | None=None,
 ) -> pd.DataFrame:
 
-    base_path = Path(base_dir)
+    storage = storage or LocalStorage()
     dfs: List[pd.DataFrame] = []
 
     for dt_str in dates:
-        file_path = base_path / f"dt={dt_str}" / "part-000.parquet"
-        if file_path.exists():
+        file_path = storage.join(base_dir, f"dt={dt_str}", "part-000.parquet")
+        if storage.exists(file_path):
             dfs.append(pd.read_parquet(file_path))
 
     if not dfs:
@@ -77,8 +78,9 @@ def load_history_partitions(
 
 def load_history(
     base_dir: str = DEFAULT_SILVER_HISTORY_DIR,
+    storage: LocalStorage | None=None,
 ) -> pd.DataFrame:
-    storage = LocalStorage()
+    storage = storage or LocalStorage()
     files = sorted(storage.list_paths(base_dir, "dt=*/part-*.parquet"))
 
     if not files:
@@ -108,10 +110,10 @@ def load_history(
 def update_history(
     new_events: List[Dict],
     base_dir: str = DEFAULT_SILVER_HISTORY_DIR,
+    storage: LocalStorage | None=None,
 ) -> pd.DataFrame:
-
-    base_path = Path(base_dir)
-    base_path.mkdir(parents=True, exist_ok=True)
+    storage = storage or LocalStorage()
+    storage.mkdir(base_dir)
 
     new_df = pd.DataFrame(new_events)
     if new_df.empty:
@@ -132,7 +134,8 @@ def update_history(
     # read affected partitions
     existing_df = load_history_partitions(
         dates=affected_dates,
-        base_dir=base_dir
+        base_dir=base_dir,
+        storage=storage,
     )
 
     if not existing_df.empty:
@@ -150,10 +153,10 @@ def update_history(
     )
 
     for dt_value, partition_df in merged_df.groupby("dt"):
-        out_dir = base_path / f"dt={dt_value}"
-        out_dir.mkdir(parents=True, exist_ok=True)
+        out_dir = storage.join(base_dir, f"dt={dt_value}")
+        storage.mkdir(out_dir)
 
-        out_path = out_dir / f"part-000.parquet"
+        out_path = storage.join(out_dir, "part-000.parquet")
         partition_df.drop(columns=["dt"]).to_parquet(out_path, index=False)
 
     return merged_df.drop(columns=["dt"])
@@ -163,6 +166,7 @@ def build_current(
     full_history_df: pd.DataFrame,
     base_dir: str = DEFAULT_SILVER_CURRENT_DIR,
     runtime: datetime | None = None,
+    storage: LocalStorage | None = None,
 ) -> pd.DataFrame:
 
     required_cols = [
@@ -217,8 +221,9 @@ def build_current(
     )
 
     current_df["snapshot_time"] = pd.Timestamp(runtime)
-    output_path = Path(base_dir) / "current.parquet"
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    output_path = storage.join(base_dir, "current.parquet")
+    storage.mkdir(storage.parent(output_path))
     current_df.to_parquet(output_path, index=False)
 
     return current_df
