@@ -1,4 +1,3 @@
-import json
 import pandas as pd
 from typing import Dict, List
 from datetime import datetime, timezone
@@ -36,15 +35,14 @@ def read_bronze_incremental(
             continue
 
         for file_path in storage.list_paths(dt_path, "*.jsonl"):
-            with storage.open_text_read(file_path) as f:
-                for line in f:
-                    event = json.loads(line)
-                    ingested_at = datetime.fromisoformat(
-                        event["ingested_at"].replace("Z", "+00:00")
-                    )
+            events_in_file = storage.read_jsonl(file_path)
 
-                    if watermark_dt is None or ingested_at > watermark_dt:
-                        events.append(event)
+            for event in events_in_file:
+                ingested_at = datetime.fromisoformat(
+                    event["ingested_at"].replace("Z", "+00:00")
+                )
+                if watermark_dt is None or ingested_at > watermark_dt:
+                    events.append(event)
 
     return events
 

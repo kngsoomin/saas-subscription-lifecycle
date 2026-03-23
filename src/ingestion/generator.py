@@ -3,11 +3,11 @@ import json
 import random
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, asdict
-from pathlib import Path
 from typing import Dict, List
 from uuid import uuid4
 
 from src.common.constants import DEFAULT_GENERATOR_SEQ_PATH, DEFAULT_GENERATOR_STATE_CURRENT_PATH
+from src.common.storage import LocalStorage
 
 
 PLAN_CATALOG = {
@@ -47,28 +47,49 @@ def parse_utc_datetime(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
-def load_last_subscription_seq(path: Path) -> int:
-    if not path.exists():
+def load_last_subscription_seq(
+    path: str,
+    storage: LocalStorage | None = None
+) -> int:
+    storage = storage or LocalStorage()
+    if not storage.exists(path):
         return 0
-    return int(path.read_text().strip())
+    with storage.open_text_read(path) as f:
+        return int(f.read().strip())
 
 
-def save_last_subscription_seq(path: Path, seq: int) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(str(seq))
+def save_last_subscription_seq(
+    path: str,
+    seq: int,
+    storage: LocalStorage | None = None
+) -> None:
+    storage = storage or LocalStorage()
+    with storage.open_text_write(path) as f:
+        f.write(str(seq))
 
 
-def load_state(path: Path) -> Dict[str, SubscriptionState]:
-    if not path.exists():
+def load_state(
+    path: str,
+    storage: LocalStorage | None = None
+) -> Dict[str, SubscriptionState]:
+    storage = storage or LocalStorage()
+    if not storage.exists(path):
         return {}
-    raw = json.loads(path.read_text())
+    with storage.open_text_read(path) as f:
+        raw = json.load(f)
+
     return {k: SubscriptionState(**v) for k, v in raw.items()}
 
 
-def save_state(path: Path, state: Dict[str, SubscriptionState]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+def save_state(
+    path: str,
+    state: Dict[str, SubscriptionState],
+    storage: LocalStorage | None = None
+) -> None:
+    storage = storage or LocalStorage()
     payload = {k: asdict(v) for k, v in state.items()}
-    path.write_text(json.dumps(payload))
+    with storage.open_text_write(path) as f:
+        json.dump(payload, f)
 
 
 def build_event(
@@ -225,14 +246,13 @@ def generate_mock_events(
         seq_path: str = DEFAULT_GENERATOR_SEQ_PATH,
         new_subscription_range: tuple[int, int] = (2, 3),
         max_existing_updates: int = 5,
+        storage: LocalStorage | None = None,
     ) -> List[dict]:
     ingested_at = utc_now()
+    storage = LocalStorage() # entry point
 
-    state_file = Path(state_path)
-    seq_file = Path(seq_path)
-
-    state_map = load_state(state_file)
-    last_seq = load_last_subscription_seq(seq_file)
+    state_map = load_state(state_path, storage=storage)
+    last_seq = load_last_subscription_seq(seq_path, storage=storage)
 
     events: List[dict] = []
 
@@ -251,8 +271,8 @@ def generate_mock_events(
         state_map[state.subscription_id] = state
         events.append(event)
 
-    save_state(state_file, state_map)
-    save_last_subscription_seq(seq_file, last_seq)
+    save_state(state_path, state_map, storage=storage)
+    save_last_subscription_seq(seq_path, last_seq, storage=storage)
 
     return events
 
