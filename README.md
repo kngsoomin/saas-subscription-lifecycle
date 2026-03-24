@@ -50,8 +50,14 @@ The platform processes subscription lifecycle events through a layered medallion
      - New data is detected via `ingested_at` watermark
      - The earliest affected `event_date` is identified
      - KPIs are recomputed **only from that date onward**
+   - Metrics are categorized into:
+     - **Flow metrics (event counts)**:
+       - `new_subscriptions`: daily count of `subscription_created` events
+       - `new_cancellations`: daily count of `subscription_cancelled` events
+     - **Stock metrics (state snapshot as of end-of-day)**:
+       - `active_subscriptions`: count of subscriptions whose latest status is `active`
+       - `mrr`: total MRR from subscriptions whose latest status is `active`
    - Results are stored as partitioned Parquet (`dt=YYYY-MM-DD`)
-
 
 ![Development & Deployment](docs/architecture/development-deployment-architecture.png)
 

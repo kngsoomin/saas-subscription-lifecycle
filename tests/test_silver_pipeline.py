@@ -36,7 +36,7 @@ def main():
         new_events=events,
         base_dir="data/silver/subscription_state_history"
     )
-    print(f"Updated history rows: {len(updated_history_df)}")
+    print(f"Updated: {len(updated_history_df)} rows")
 
     # 4. build current
     full_history_df = load_history(
@@ -46,7 +46,7 @@ def main():
         full_history_df=full_history_df,
         base_dir="data/silver/subscription_state_current"
     )
-    print(f"Current snapshot rows: {len(current_df)}")
+    print(f"Current snapshot: {len(current_df)} rows")
 
     # 5. update watermark
     max_ingested_at = max(e["ingested_at"] for e in events)
