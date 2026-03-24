@@ -7,9 +7,34 @@ from src.gold.kpi_daily import (
     update_gold_watermark,
 )
 from src.silver.watermark import load_watermark
+from src.common.storage import LocalStorage
+import pandas as pd
+
 
 
 PIPELINE_NAME = "test_gold_pipeline"
+
+
+def print_gold_kpi_daily():
+    storage = LocalStorage()
+
+    all_paths = storage.list_paths("data/gold/kpi_daily", "dt=*")
+
+    dfs = []
+    for dt_path in all_paths:
+        file_path = storage.join(dt_path, "part-000.parquet")
+
+        if storage.exists(file_path):
+            df = storage.read_parquet(file_path)
+            dfs.append(df)
+
+    print("\n=== FULL KPI DAILY ===")
+    if dfs:
+        full_df = pd.concat(dfs, ignore_index=True).sort_values("date")
+        print(full_df)
+    else:
+        print("No gold data found.")
+    print("=== DONE ===")
 
 
 def main():
@@ -32,10 +57,12 @@ def main():
 
     if history_df.empty:
         print("No history data. Exit.")
+        print_gold_kpi_daily()
         return
 
     if incremental_df.empty:
         print("No incremental rows. Exit.")
+        print_gold_kpi_daily()
         return
 
     # 3. find affected start date
@@ -81,6 +108,8 @@ def main():
 
     print("=== DONE ===")
 
+    # 8. load full gold table
+    print_gold_kpi_daily()
 
 if __name__ == "__main__":
     main()

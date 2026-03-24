@@ -2,10 +2,43 @@
 import json
 from pathlib import Path
 from typing import List
+import pandas as pd
+from abc import ABC, abstractmethod
 
 
 
-class LocalStorage:
+class Storage(ABC):
+    @abstractmethod
+    def join(self, *parts: str) -> str:
+        pass
+
+    @abstractmethod
+    def exists(self, path: str) -> bool:
+        pass
+
+    @abstractmethod
+    def list_paths(self, base_dir: str, pattern: str) -> List[str]:
+        pass
+
+    @abstractmethod
+    def read_jsonl(self, path: str) -> List[dict]:
+        pass
+
+    @abstractmethod
+    def write_jsonl(self, path: str, records: List[dict]) -> None:
+        pass
+
+    @abstractmethod
+    def read_parquet(self, path: str) -> pd.DataFrame:
+        pass
+
+    @abstractmethod
+    def write_parquet(self, path: str, df: pd.DataFrame) -> None:
+        pass
+
+
+
+class LocalStorage(Storage):
     """
     Local filesystem-backed storage helper
     """
@@ -44,6 +77,7 @@ class LocalStorage:
         return path.open("w", encoding="utf-8")
 
     def read_jsonl(self, path: str) -> List[dict]:
+        """Read a jsonl file into a list"""
         records = []
         with self.open_text_read(path) as f:
             for line in f:
@@ -51,6 +85,16 @@ class LocalStorage:
             return records
 
     def write_jsonl(self, path: str, records: List[dict]) -> None:
+        """Write records to a jsonl file"""
         with self.open_text_write(path) as f:
             for record in records:
                 f.write(json.dumps(record) + "\n")
+
+    def read_parquet(self, path: str) -> pd.DataFrame:
+        """Read a parquet file into a dataframe"""
+        return pd.read_parquet(path)
+
+    def write_parquet(self, path: str, df: pd.DataFrame) -> None:
+        """Write a dataframe to a parquet file"""
+        self.mkdir(self.parent(path))
+        df.to_parquet(path, index=False)
