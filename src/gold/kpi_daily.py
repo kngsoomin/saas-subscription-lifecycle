@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import pandas as pd
 from datetime import datetime, timezone
 
@@ -13,6 +11,8 @@ from src.common.constants import (
     DEFAULT_GOLD_KPI_DAILY_DIR,
     DEFAULT_PIPELINE_STATE_DIR,
 )
+from src.common.storage import LocalStorage, Storage
+
 
 KPI_DAILY_COLUMNS = [
     "date",
@@ -28,9 +28,14 @@ KPI_DAILY_COLUMNS = [
 def load_gold_inputs(
     last_watermark: str | None,
     silver_history_path: str = DEFAULT_SILVER_HISTORY_DIR,
+    storage: Storage | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    storage = storage or LocalStorage()
 
-    history_df = load_history(base_dir=silver_history_path)
+    history_df = load_history(
+        base_dir=silver_history_path,
+        storage=storage
+    )
     if history_df.empty:
         return history_df, pd.DataFrame()
 
@@ -118,37 +123,37 @@ def build_kpi_daily_df(
 def write_kpi_daily_partitions(
     kpi_df: pd.DataFrame,
     base_dir: str = DEFAULT_GOLD_KPI_DAILY_DIR,
+    storage: Storage | None = None,
 ) -> None:
+    storage = storage or LocalStorage()
+
     if kpi_df.empty:
         return
 
-    base_path = Path(base_dir)
-    base_path.mkdir(parents=True, exist_ok=True)
-
     for _, row in kpi_df.iterrows():
         dt_value = row["date"]
-        out_dir = base_path / f"dt={dt_value}"
-        out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / "part-000.parquet"
-        pd.DataFrame([row]).to_parquet(out_path, index=False)
+        out_dir = storage.join(base_dir, f"dt={dt_value}")
+        out_path = storage.join(out_dir, "part-000.parquet")
 
+        partition_df = pd.DataFrame([row])
+        storage.write_parquet(out_path, partition_df)
 
 def validate_latest_kpi_with_current(
     kpi_df: pd.DataFrame,
     current_snapshot_path: str = DEFAULT_SILVER_CURRENT_PATH,
+    storage: Storage | None = None,
 ) -> dict:
-    current_file = Path(current_snapshot_path)
-
+    storage = storage or LocalStorage()
     empty_result = {
         "is_valid": True,
         "checked": False,
         "reason": "no_data",
     }
 
-    if kpi_df.empty or (not current_file.exists()):
+    if kpi_df.empty or (not storage.exists(current_snapshot_path)):
         return empty_result
 
-    current_df = pd.read_parquet(current_file)
+    current_df = storage.read_parquet(current_snapshot_path)
     if current_df.empty:
         return empty_result
 
@@ -185,7 +190,9 @@ def update_gold_watermark(
     incremental_df: pd.DataFrame,
     pipeline_name: str,
     state_base_dir: str = DEFAULT_PIPELINE_STATE_DIR,
+    storage: Storage | None = None,
 ) -> None:
+    storage = storage or LocalStorage()
     if incremental_df.empty:
         return
 
@@ -195,5 +202,6 @@ def update_gold_watermark(
         pipeline_name=pipeline_name,
         last_processed_ingested_at=new_watermark,
         base_dir=state_base_dir,
+        storage=storage,
     )
 

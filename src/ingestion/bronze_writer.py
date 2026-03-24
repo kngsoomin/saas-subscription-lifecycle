@@ -3,14 +3,14 @@ from datetime import datetime, timezone
 from typing import List, Dict
 
 from src.common.constants import DEFAULT_BRONZE_BASE_DIR
-from src.common.storage import LocalStorage
+from src.common.storage import LocalStorage, Storage
 
 
 def build_bronze_output_path(
     *,
     base_dir: str = DEFAULT_BRONZE_BASE_DIR,
     runtime: datetime | None = None,
-    storage: LocalStorage | None = None,
+    storage: Storage | None = None,
 ) -> str:
     storage = storage or LocalStorage()
     runtime = runtime or datetime.now(timezone.utc)
@@ -28,8 +28,8 @@ def write_events_to_jsonl(
     *,
     events: List[Dict],
     output_path: str,
-    storage: LocalStorage | None = None,
-) -> str:
+    storage: Storage | None = None,
+) -> str | None:
     if not events:
         return None
     storage = storage or LocalStorage()
@@ -42,7 +42,7 @@ def write_bronze_events(
     events: List[Dict],
     base_dir: str = DEFAULT_BRONZE_BASE_DIR,
     runtime: datetime | None = None,
-    storage: LocalStorage | None = None,
+    storage: Storage | None = None,
 ) -> str | None:
     if not events:
         return None

@@ -7,13 +7,13 @@ from src.common.constants import (
     DEFAULT_SILVER_HISTORY_DIR,
     DEFAULT_SILVER_CURRENT_DIR
 )
-from src.common.storage import LocalStorage
+from src.common.storage import LocalStorage, Storage
 
 
 def read_bronze_incremental(
     last_watermark: str | None,
     base_dir: str=DEFAULT_BRONZE_BASE_DIR,
-    storage: LocalStorage | None=None,
+    storage: Storage | None=None,
 ) -> List[Dict]:
 
     storage = storage or LocalStorage()
@@ -50,7 +50,7 @@ def read_bronze_incremental(
 def load_history_partitions(
     dates: list[str],
     base_dir: str = DEFAULT_SILVER_HISTORY_DIR,
-    storage: LocalStorage | None=None,
+    storage: Storage | None=None,
 ) -> pd.DataFrame:
 
     storage = storage or LocalStorage()
@@ -59,7 +59,7 @@ def load_history_partitions(
     for dt_str in dates:
         file_path = storage.join(base_dir, f"dt={dt_str}", "part-000.parquet")
         if storage.exists(file_path):
-            dfs.append(pd.read_parquet(file_path))
+            dfs.append(storage.read_parquet(file_path))
 
     if not dfs:
         return pd.DataFrame()
@@ -76,7 +76,7 @@ def load_history_partitions(
 
 def load_history(
     base_dir: str = DEFAULT_SILVER_HISTORY_DIR,
-    storage: LocalStorage | None=None,
+    storage: Storage | None=None,
 ) -> pd.DataFrame:
     storage = storage or LocalStorage()
     files = sorted(storage.list_paths(base_dir, "dt=*/part-*.parquet"))
@@ -84,7 +84,7 @@ def load_history(
     if not files:
         return pd.DataFrame()
 
-    df = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
+    df = pd.concat([storage.read_parquet(f) for f in files], ignore_index=True)
     if df.empty:
         return df
 
@@ -108,10 +108,9 @@ def load_history(
 def update_history(
     new_events: List[Dict],
     base_dir: str = DEFAULT_SILVER_HISTORY_DIR,
-    storage: LocalStorage | None=None,
+    storage: Storage | None=None,
 ) -> pd.DataFrame:
     storage = storage or LocalStorage()
-    storage.mkdir(base_dir)
 
     new_df = pd.DataFrame(new_events)
     if new_df.empty:
@@ -152,10 +151,8 @@ def update_history(
 
     for dt_value, partition_df in merged_df.groupby("dt"):
         out_dir = storage.join(base_dir, f"dt={dt_value}")
-        storage.mkdir(out_dir)
-
         out_path = storage.join(out_dir, "part-000.parquet")
-        partition_df.drop(columns=["dt"]).to_parquet(out_path, index=False)
+        storage.write_parquet(out_path, partition_df.drop(columns=["dt"]))
 
     return merged_df.drop(columns=["dt"])
 
@@ -164,9 +161,9 @@ def build_current(
     full_history_df: pd.DataFrame,
     base_dir: str = DEFAULT_SILVER_CURRENT_DIR,
     runtime: datetime | None = None,
-    storage: LocalStorage | None = None,
+    storage: Storage | None = None,
 ) -> pd.DataFrame:
-
+    storage = storage or LocalStorage()
     required_cols = [
         "subscription_id",
         "user_id",
@@ -221,8 +218,7 @@ def build_current(
     current_df["snapshot_time"] = pd.Timestamp(runtime)
 
     output_path = storage.join(base_dir, "current.parquet")
-    storage.mkdir(storage.parent(output_path))
-    current_df.to_parquet(output_path, index=False)
+    storage.write_parquet(output_path, current_df)
 
     return current_df
 

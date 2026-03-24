@@ -7,7 +7,7 @@ from typing import Dict, List
 from uuid import uuid4
 
 from src.common.constants import DEFAULT_GENERATOR_SEQ_PATH, DEFAULT_GENERATOR_STATE_CURRENT_PATH
-from src.common.storage import LocalStorage
+from src.common.storage import LocalStorage, Storage
 
 
 PLAN_CATALOG = {
@@ -49,7 +49,7 @@ def parse_utc_datetime(value: str) -> datetime:
 
 def load_last_subscription_seq(
     path: str,
-    storage: LocalStorage | None = None
+    storage: Storage | None = None
 ) -> int:
     storage = storage or LocalStorage()
     if not storage.exists(path):
@@ -61,7 +61,7 @@ def load_last_subscription_seq(
 def save_last_subscription_seq(
     path: str,
     seq: int,
-    storage: LocalStorage | None = None
+    storage: Storage | None = None
 ) -> None:
     storage = storage or LocalStorage()
     with storage.open_text_write(path) as f:
@@ -70,7 +70,7 @@ def save_last_subscription_seq(
 
 def load_state(
     path: str,
-    storage: LocalStorage | None = None
+    storage: Storage | None = None
 ) -> Dict[str, SubscriptionState]:
     storage = storage or LocalStorage()
     if not storage.exists(path):
@@ -84,7 +84,7 @@ def load_state(
 def save_state(
     path: str,
     state: Dict[str, SubscriptionState],
-    storage: LocalStorage | None = None
+    storage: Storage | None = None
 ) -> None:
     storage = storage or LocalStorage()
     payload = {k: asdict(v) for k, v in state.items()}
@@ -246,10 +246,10 @@ def generate_mock_events(
         seq_path: str = DEFAULT_GENERATOR_SEQ_PATH,
         new_subscription_range: tuple[int, int] = (2, 3),
         max_existing_updates: int = 5,
-        storage: LocalStorage | None = None,
+        storage: Storage | None = None,
     ) -> List[dict]:
     ingested_at = utc_now()
-    storage = LocalStorage() # entry point
+    storage = storage or LocalStorage() # entry point
 
     state_map = load_state(state_path, storage=storage)
     last_seq = load_last_subscription_seq(seq_path, storage=storage)
