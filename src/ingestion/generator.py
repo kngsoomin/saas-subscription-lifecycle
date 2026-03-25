@@ -6,7 +6,10 @@ from dataclasses import dataclass, asdict
 from typing import Dict, List
 from uuid import uuid4
 
-from src.common.constants import DEFAULT_GENERATOR_SEQ_PATH, DEFAULT_GENERATOR_STATE_CURRENT_PATH
+from src.common.constants import (
+    DEFAULT_GENERATOR_SEQ_PATH,
+    DEFAULT_GENERATOR_STATE_CURRENT_PATH
+)
 from src.common.storage import LocalStorage, Storage
 
 

@@ -8,6 +8,7 @@ from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
 from src.common.constants import SILVER_DAG_ID, GOLD_KPI_DAILY_DAG_ID
+from src.common.storage_factory import get_storage
 from src.silver.transform import (
     read_bronze_incremental,
     load_history,
@@ -21,12 +22,14 @@ logger = logging.getLogger(__name__)
 
 
 def transform_bronze_to_silver() -> None:
+    storage = get_storage()
+
     # load watermark
-    last_watermark = load_watermark(pipeline_name=SILVER_DAG_ID)
+    last_watermark = load_watermark(pipeline_name=SILVER_DAG_ID, storage=storage)
     logger.info(f"Loaded watermark: {last_watermark}")
 
     # read bronze incremental
-    new_events = read_bronze_incremental(last_watermark=last_watermark)
+    new_events = read_bronze_incremental(last_watermark=last_watermark, storage=storage)
     logger.info(f"Read {len(new_events)} bronze events")
 
     if not new_events:
@@ -34,12 +37,12 @@ def transform_bronze_to_silver() -> None:
         return
 
     # update affected history partitions
-    updated_history_df = update_history(new_events=new_events)
+    updated_history_df = update_history(new_events=new_events, storage=storage)
     logger.info(f"Built affected history rows: {len(updated_history_df)} rows")
 
     # load full history for current snapshot
     full_history_df = load_history()
-    current_df = build_current(full_history_df=full_history_df)
+    current_df = build_current(full_history_df=full_history_df, storage=storage)
     logger.info(f"Built current snapshot with {len(current_df)} rows")
 
     # save watermark
@@ -47,6 +50,7 @@ def transform_bronze_to_silver() -> None:
     save_watermark(
         pipeline_name=SILVER_DAG_ID,
         last_processed_ingested_at=max_ingested_at,
+        storage=storage,
     )
     logger.info(f"Saved watermark: {max_ingested_at}")
 
