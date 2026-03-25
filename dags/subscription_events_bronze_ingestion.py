@@ -7,13 +7,15 @@ from airflow.operators.python import PythonOperator
 from src.ingestion.generator import generate_mock_events
 from src.ingestion.bronze_writer import write_bronze_events
 from src.common.constants import BRONZE_DAG_ID
+from src.common.storage_factory import get_storage
 
 logger = logging.getLogger(__name__)
 
 
 def generate_and_write_bronze() -> None:
-    events = generate_mock_events()
-    output_path = write_bronze_events(events=events)
+    storage = get_storage()
+    events = generate_mock_events(storage=storage)
+    output_path = write_bronze_events(events=events, storage=storage)
 
     logger.info("Generated %s events", len(events))
     logger.info("Bronze file written to %s", output_path)

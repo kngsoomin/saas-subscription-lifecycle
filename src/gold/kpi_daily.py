@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime, timezone
 
 from src.silver.transform import load_history
-from src.silver.watermark import save_watermark, load_watermark
+from src.silver.watermark import save_watermark
 from src.common.constants import (
     DEFAULT_SILVER_HISTORY_DIR,
     DEFAULT_SILVER_CURRENT_PATH,

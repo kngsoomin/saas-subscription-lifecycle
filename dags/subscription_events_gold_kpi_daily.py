@@ -15,6 +15,7 @@ from src.gold.kpi_daily import (
     update_gold_watermark,
 )
 from src.silver.watermark import load_watermark
+from src.common.storage_factory import get_storage
 from src.common.constants import GOLD_KPI_DAILY_DAG_ID
 
 
@@ -22,12 +23,14 @@ logger = logging.getLogger(__name__)
 
 
 def update_gold_kpi_daily() -> None:
+    storage = get_storage()
+
     # load last watermark
-    last_watermark = load_watermark(pipeline_name=GOLD_KPI_DAILY_DAG_ID)
+    last_watermark = load_watermark(pipeline_name=GOLD_KPI_DAILY_DAG_ID, storage=storage)
     logger.info("Loaded gold watermark: %s", last_watermark)
 
     # load original kpi df and newly updated df
-    history_df, incremental_df = load_gold_inputs(last_watermark=last_watermark)
+    history_df, incremental_df = load_gold_inputs(last_watermark=last_watermark, storage=storage)
 
     if history_df.empty:
         logger.info("No history data found. Skipping gold update.")
@@ -48,11 +51,11 @@ def update_gold_kpi_daily() -> None:
         return
 
     # write partitions (by event_time:dt)
-    write_kpi_daily_partitions(kpi_df=kpi_df)
+    write_kpi_daily_partitions(kpi_df=kpi_df, storage=storage)
     logger.info("Wrote %s gold KPI rows", len(kpi_df))
 
     # cross-check current snapshot and kpi table
-    validation_result = validate_latest_kpi_with_current(kpi_df=kpi_df)
+    validation_result = validate_latest_kpi_with_current(kpi_df=kpi_df, storage=storage)
     logger.info("Gold validation result: %s", validation_result)
 
     if not validation_result["is_valid"]:
@@ -62,6 +65,7 @@ def update_gold_kpi_daily() -> None:
     update_gold_watermark(
         incremental_df=incremental_df,
         pipeline_name=GOLD_KPI_DAILY_DAG_ID,
+        storage=storage,
     )
     logger.info("Updated gold watermark.")
 

@@ -1,3 +1,4 @@
+from src.common.storage import LocalStorage
 from src.silver.transform import (
     read_bronze_incremental,
     update_history,
@@ -5,6 +6,7 @@ from src.silver.transform import (
     load_history
 )
 from src.silver.watermark import load_watermark, save_watermark
+from src.common.constants import TEST_ROOT
 
 
 PIPELINE_NAME = "test_silver_pipeline"
@@ -13,17 +15,19 @@ PIPELINE_NAME = "test_silver_pipeline"
 def main():
     print("=== SILVER PIPELINE TEST START ===")
 
+    storage = LocalStorage(base_dir=TEST_ROOT)
+
     # 1. load watermark
     last_watermark = load_watermark(
         pipeline_name=PIPELINE_NAME,
-        base_dir="data/state/pipeline"
+        storage=storage
     )
     print(f"Loaded watermark: {last_watermark}")
 
     # 2. read bronze incremental
     events = read_bronze_incremental(
         last_watermark=last_watermark,
-        base_dir="data/bronze/subscription_events"
+        storage=storage
     )
     print(f"Read {len(events)} events")
 
@@ -34,17 +38,15 @@ def main():
     # 3. build history
     updated_history_df = update_history(
         new_events=events,
-        base_dir="data/silver/subscription_state_history"
+        storage=storage
     )
     print(f"Updated: {len(updated_history_df)} rows")
 
     # 4. build current
-    full_history_df = load_history(
-        base_dir="data/silver/subscription_state_history"
-    )
+    full_history_df = load_history(storage=storage)
     current_df = build_current(
         full_history_df=full_history_df,
-        base_dir="data/silver/subscription_state_current"
+        storage=storage
     )
     print(f"Current snapshot: {len(current_df)} rows")
 
@@ -53,7 +55,7 @@ def main():
     save_watermark(
         pipeline_name=PIPELINE_NAME,
         last_processed_ingested_at=max_ingested_at,
-        base_dir="data/state/pipeline"
+        storage=storage
     )
 
     print(f"Updated watermark: {max_ingested_at}")
