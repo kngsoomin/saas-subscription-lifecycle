@@ -1,10 +1,10 @@
 import logging
 
-from src.common.storage import LocalStorage
 from src.ingestion.generator import generate_mock_events
 from src.ingestion.bronze_writer import write_bronze_events
 
 from src.common.constants import TEST_ROOT
+from src.common.storage_factory import get_storage
 
 
 logging.basicConfig(
@@ -18,7 +18,7 @@ def main():
 
     logger.info("Starting mock event generation")
 
-    storage = LocalStorage(base_dir=TEST_ROOT)
+    storage = get_storage()
     events = generate_mock_events(storage=storage)
 
     logger.info("Generated %s events", len(events))

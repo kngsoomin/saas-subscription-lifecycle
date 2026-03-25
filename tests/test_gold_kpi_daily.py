@@ -7,7 +7,7 @@ from src.gold.kpi_daily import (
     update_gold_watermark,
 )
 from src.silver.watermark import load_watermark
-from src.common.storage import LocalStorage
+from src.common.storage_factory import get_storage
 from src.common.constants import TEST_ROOT, DEFAULT_GOLD_KPI_DAILY_DIR
 import pandas as pd
 
@@ -17,7 +17,7 @@ PIPELINE_NAME = "test_gold_pipeline"
 
 
 def print_gold_kpi_daily():
-    storage = LocalStorage(base_dir=TEST_ROOT)
+    storage = get_storage()
 
     all_paths = storage.list_paths(DEFAULT_GOLD_KPI_DAILY_DIR, "dt=*")
 
@@ -40,7 +40,7 @@ def print_gold_kpi_daily():
 
 def main():
     print("=== GOLD PIPELINE TEST START ===")
-    storage = LocalStorage(base_dir=TEST_ROOT)
+    storage = get_storage()
 
     # 1. load watermark
     last_watermark = load_watermark(

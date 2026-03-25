@@ -31,6 +31,14 @@ class Storage(ABC):
         pass
 
     @abstractmethod
+    def read_text(self, path: str) -> str:
+        pass
+
+    @abstractmethod
+    def write_text(self, path: str, content: str) -> None:
+        pass
+
+    @abstractmethod
     def read_jsonl(self, path: str) -> List[dict]:
         pass
 
@@ -97,14 +105,14 @@ class LocalStorage(Storage):
             for p in physical_base.glob(pattern)
         )
 
-    def open_text_read(self, path: str):
+    def read_text(self, path: str) -> str:
         physical_path = self._to_physical_path(path)
-        return physical_path.open("r", encoding="utf-8")
+        return physical_path.read_text(encoding="utf-8")
 
-    def open_text_write(self, path: str):
+    def write_text(self, path: str, content: str) -> None:
         physical_path = self._to_physical_path(path)
         physical_path.parent.mkdir(parents=True, exist_ok=True)
-        return physical_path.open("w", encoding="utf-8")
+        physical_path.write_text(content, encoding="utf-8")
 
     def read_jsonl(self, path: str) -> List[dict]:
         physical_path = self._to_physical_path(path)
@@ -169,13 +177,12 @@ class S3Storage(Storage):
 
     def _key_to_logical_path(self, key: str) -> str:
         if self.base_prefix:
-            prefix = f"/{base_prefix}"
+            prefix = f"{self.base_prefix}/"
             if key.startswith(prefix):
                 return key[len(prefix):]
-            if key == prefix:
+            if key == self.base_prefix:
                 return ""
-        else:
-            return key
+        return key
 
     # high-level storage contract
     def exists(self, path: str) -> bool:
@@ -225,6 +232,19 @@ class S3Storage(Storage):
             )
 
         raise ValueError(f"Unsupported S3 list_paths pattern: {pattern}")
+
+    def read_text(self, path: str) -> str:
+        key = self._to_key(path)
+        obj = self.s3_client.get_object(Bucket=self.bucket, Key=key)
+        return obj["Body"].read().decode("utf-8")
+
+    def write_text(self, path: str, content: str) -> None:
+        key = self._to_key(path)
+        self.s3_client.put_object(
+            Bucket=self.bucket,
+            Key=key,
+            Body=content.encode("utf-8"),
+        )
 
     def read_jsonl(self, path: str) -> List[dict]:
         key = self._to_key(path)

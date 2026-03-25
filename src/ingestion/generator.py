@@ -57,8 +57,8 @@ def load_last_subscription_seq(
     storage = storage or LocalStorage()
     if not storage.exists(path):
         return 0
-    with storage.open_text_read(path) as f:
-        return int(f.read().strip())
+    content = storage.read_text(path)
+    return int(json.loads(content))
 
 
 def save_last_subscription_seq(
@@ -67,8 +67,7 @@ def save_last_subscription_seq(
     storage: Storage | None = None
 ) -> None:
     storage = storage or LocalStorage()
-    with storage.open_text_write(path) as f:
-        f.write(str(seq))
+    storage.write_text(path, str(seq))
 
 
 def load_state(
@@ -78,10 +77,9 @@ def load_state(
     storage = storage or LocalStorage()
     if not storage.exists(path):
         return {}
-    with storage.open_text_read(path) as f:
-        raw = json.load(f)
 
-    return {k: SubscriptionState(**v) for k, v in raw.items()}
+    content = storage.read_text(path)
+    return {k: SubscriptionState(**v) for k, v in json.loads(content).items()}
 
 
 def save_state(
@@ -91,8 +89,7 @@ def save_state(
 ) -> None:
     storage = storage or LocalStorage()
     payload = {k: asdict(v) for k, v in state.items()}
-    with storage.open_text_write(path) as f:
-        json.dump(payload, f)
+    storage.write_text(path, json.dumps(payload))
 
 
 def build_event(
