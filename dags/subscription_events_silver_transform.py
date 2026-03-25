@@ -41,7 +41,7 @@ def transform_bronze_to_silver() -> None:
     logger.info(f"Built affected history rows: {len(updated_history_df)} rows")
 
     # load full history for current snapshot
-    full_history_df = load_history()
+    full_history_df = load_history(storage=storage)
     current_df = build_current(full_history_df=full_history_df, storage=storage)
     logger.info(f"Built current snapshot with {len(current_df)} rows")
 
