@@ -14,8 +14,8 @@ def load_watermark(
     if not storage.exists(path):
         return None
 
-    with storage.open_text_read(path) as f:
-        payload = json.load(f)
+    content = storage.read_text(path)
+    payload = json.loads(content)
 
     return payload.get(pipeline_name, {}).get("last_processed_ingested_at")
 
@@ -29,14 +29,12 @@ def save_watermark(
     path = storage.join(base_dir, "watermark.json")
 
     if storage.exists(path):
-        with storage.open_text_read(path) as f:
-            payload = json.load(f)
+        content = storage.read_text(path)
+        payload = json.loads(content)
     else:
         payload = {}
 
     payload[pipeline_name] = {
         "last_processed_ingested_at": last_processed_ingested_at,
     }
-
-    with storage.open_text_write(path) as f:
-        json.dump(payload, f, indent=2)
+    storage.write_text(path, json.dumps(payload, indent=2))

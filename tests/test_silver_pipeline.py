@@ -1,4 +1,3 @@
-from src.common.storage import LocalStorage
 from src.silver.transform import (
     read_bronze_incremental,
     update_history,
@@ -7,7 +6,7 @@ from src.silver.transform import (
 )
 from src.silver.watermark import load_watermark, save_watermark
 from src.common.constants import TEST_ROOT
-
+from src.common.storage_factory import get_storage
 
 PIPELINE_NAME = "test_silver_pipeline"
 
@@ -15,7 +14,7 @@ PIPELINE_NAME = "test_silver_pipeline"
 def main():
     print("=== SILVER PIPELINE TEST START ===")
 
-    storage = LocalStorage(base_dir=TEST_ROOT)
+    storage = get_storage()
 
     # 1. load watermark
     last_watermark = load_watermark(
