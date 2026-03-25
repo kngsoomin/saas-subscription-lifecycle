@@ -1,4 +1,4 @@
-# Reflection Designing a Data Lake on S3
+## Reflection Designing a Data Lake on S3
 
 In Phase1 and Phase2, I designed the data pipeline around an **append-only Bronze layer and deterministic recomputation downstream**.
 
