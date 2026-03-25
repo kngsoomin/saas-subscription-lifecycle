@@ -1,5 +1,3 @@
-# Reflection Designing a Data Lake on S3
-
 In Phase1 and Phase2, I designed the data pipeline around an **append-only Bronze layer and deterministic recomputation downstream**.
 
 At the Bronze layer, all incoming events are stored as immutable logs, partitioned by `ingested_at`. This ensures that the raw data remains untouched and serves as a reliable source of truth. Instead of attempting to update or mutate data in place, I intentionally structured the system so that all downstream datasets can be rebuilt from this immutable layer.
