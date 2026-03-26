@@ -36,14 +36,17 @@ Checklist:
   - 🎉
 
 #### Phase 2: Upgrade to Cloud data lake
-
-- [ ] path/config abstraction
-- [ ] local/s3 configurable
-- [ ] bronze <-> s3
-- [ ] schema validation with pydantic
-- [ ] invalid event ?
-- [ ] enhance data quality check
-- ...
+Storage Layer
+- [x] introduce `Storage` abstraction to decouple pipeline logic from storage backend (local <-> S3)
+- [x] implement `S3Storage` and `LocalStorage`
+- [x] refactor all pipeline layers to use logical paths instead of hardcoded local filesystem paths
+- [x] run bronze - silver - gold pipeline end-to-end on S3
+- [x] migrate state handling (generator/pipeline watermark) to storage-backed i/o
+- [x] inject storage backend at DAG level
+- [x] Update README to document the S3-based data lake layout and storage abstraction design
+- [x] Extend validation framework with schema enforcement and data quality monitoring
+- [x] Add data quality checks and monitoring for bronze / silver / gold outputs
+- 🎉
 
 #### Phase 3: streaming extension for real-time ingestion
 ```
@@ -64,6 +67,7 @@ tbu
 - publish mock events to Kafka
 - consume events into bronze storage
 - continue downstream transformation with Airflow for silver/gold
+- iceberg
 
 #### EC2 Specification (Phase 1 - Airflow Orchestration)
 

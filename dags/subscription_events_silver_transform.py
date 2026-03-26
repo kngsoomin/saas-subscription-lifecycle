@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+import pandas as pd
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
@@ -15,6 +16,7 @@ from src.silver.transform import (
     update_history,
     build_current
 )
+from src.silver.validation import validate_silver_history, validate_silver_current
 from src.silver.watermark import load_watermark, save_watermark
 
 
@@ -40,10 +42,47 @@ def transform_bronze_to_silver() -> None:
     updated_history_df = update_history(new_events=new_events, storage=storage)
     logger.info(f"Built affected history rows: {len(updated_history_df)} rows")
 
+    new_events_df = pd.DataFrame(new_events)
+    affected_partitions = sorted(
+        pd.to_datetime(new_events_df["event_time"], utc=True)
+        .dt.strftime("%Y-%m-%d")
+        .unique()
+        .tolist()
+    )
+    history_validation = validate_silver_history(
+        df=updated_history_df,
+        affected_partitions=affected_partitions
+    )
+    logger.info(
+        "silver_history_validation_summary=%s",
+        history_validation.log_summary()
+    )
+    if not history_validation.passed:
+        logger.error(
+            "silver_history_validation_failed_checks=%s",
+            history_validation.failed_check_details(),
+        )
+        history_validation.raise_if_failed()
+
     # load full history for current snapshot
     full_history_df = load_history(storage=storage)
     current_df = build_current(full_history_df=full_history_df, storage=storage)
     logger.info(f"Built current snapshot with {len(current_df)} rows")
+
+    current_validation = validate_silver_current(
+        current_df=current_df,
+        history_df=full_history_df,
+    )
+    logger.info(
+        "silver_current_validation_summary=%s",
+        current_validation.log_summary()
+    )
+    if not current_validation.passed:
+        logger.error(
+            "silver_current_validation_failed_checks=%s",
+            current_validation.failed_check_details(),
+        )
+        current_validation.raise_if_failed()
 
     # save watermark
     max_ingested_at = max(event["ingested_at"] for event in new_events)

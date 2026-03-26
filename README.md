@@ -1,7 +1,7 @@
 # SaaS Subscription Lifecycle Data Platform
 
-This project builds an event-driven data platform that models subscription lifecycle events, 
-ingests them into a medallion architecture, and incrementally transforms them into reliable analytical datasets.
+This project builds an event-driven data platform that models subscription lifecycle events,
+stores them in an S3-backed medallion data lake, and incrementally transforms them into reliable analytical datasets.
 
 It starts as a batch-based pipeline orchestrated with Airflow 
 and is designed to evolve into a real-time streaming system using Kafka and Spark,
@@ -10,15 +10,20 @@ with minimal changes to the core data model and storage layout.
 
 ## Key Features
 
-- Event-driven lifecycle modeling (append-only, no overwrites)
-- Incremental & idempotent processing (watermark + deduplication)
-- Medallion architecture (Bronze → Silver → Gold)
-- Deterministic state reconstruction (history → current snapshot)
-- Designed for batch-to-streaming evolution
+- Stateful event generator for realistic lifecycle simulation
+- Incremental processing using `ingested_at` watermarks
+- Partition-aware recomputation for late-arriving events
+- Event-sourced state reconstruction (history → current snapshot)
+- Idempotent processing via event deduplication (`event_id`)
+- S3-backed data lake with environment-agnostic storage abstraction
+- Layered data validation across Bronze, Silver, and Gold
+- Cross-layer consistency checks between KPIs and reconstructed state
+- Designed for batch-first execution with a clear path to streaming (Kafka/Spark)
 
-## Architecture
 
-![Data Flow](docs/architecture/data-flow.png)
+## Architecture Overview
+
+![Data Flow](docs/architecture/data-flow-phase2.png)
 
 ### Data Flow (Phase 1)
 
@@ -29,23 +34,26 @@ The platform processes subscription lifecycle events through a layered medallion
 2. **Ingestion (Airflow)**
    - Events are written to Bronze layer as JSONL files
    - Partitioned by ingestion date (`dt=YYYY-MM-DD`)
-3. **Storage (Local FS)**
-   - Local filesystem structured to mirror S3 object storage layout for seamless migration to AWS S3
+3. **Storage (S3 Data Lake)**
+   - Data is stored in an S3-backed object storage system
+   - A storage abstraction layer allows seamless switching between local filesystem and S3
 4. **Processing (Airflow)**
-   - Incremental Bronze → Silver transformation
+   - Incremental Bronze → Silver transformation using `ingested_at` watermark
      - Builds:
        - Silver History
-         - Events are transformed into a canonical subscription state history, deduplicated using `event_id` for idempotency
-         - State is reconstructed by ordering events using `event_time` and `ingested_at`
-         - Data is stored as **partitioned Parquet files (`dt=YYYY-MM-DD`)**
+         - Events are transformed into a canonical subscription state history
+         - Deduplicated using `event_id` for idempotency
+         - State is reconstructed using `event_time` and `ingested_at`
+         - Data is stored as **partitioned Parquet files (`dt=YYYY-MM-DD`, event date)**
          - Only **affected partitions are re-written**
+         - State validation ensures ordering and consistency
        - Silver Current
-         - A latest subscription snapshot is derived from the full history table
-         - For each `subscription_id`, the most recent event is selected
-         - This table represents the **current state of all subscriptions**
+         - Latest subscription snapshot derived from full history
+         - One record per `subscription_id`
+         - Represents the **current state of all subscriptions**
 5. **Serving (Gold Layer)**
    - Daily KPIs are derived from event-driven state reconstruction (history table)
-     - `new_subscriptions`, `new_cancellations`, `MRR`
+
    - Incremental logic:
      - New data is detected via `ingested_at` watermark
      - The earliest affected `event_date` is identified
@@ -66,6 +74,11 @@ The platform processes subscription lifecycle events through a layered medallion
 - **CI/CD Pipeline (GitHub Actions)**
 - **Infrastructure (AWS EC2)**
   - Compute layer hosting the data platform
+  - Attached IAM role for secure S3 access
+- **Storage (AWS S3)**
+  - Data lake for Bronze, Silver, and Gold layers
+- **Networking**
+  - Elastic IP for stable public access to Airflow UI
 - **Configuration (Ansible)**
   - Provision EC2 instance
   - Install Docker and dependencies 
@@ -82,13 +95,14 @@ The platform processes subscription lifecycle events through a layered medallion
 
 ### 2. Incremental Processing via Watermarks
 - All layers process data incrementally using an `ingested_at` watermark
+- Bronze appends new events, while Silver and Gold selectively recompute affected data
 - Enables efficient updates without full recomputation
 
 ### 3. Partition-Level Update & Partial Recompute
-- To build silver history only affected partitions are reloaded and overwritten
+- To build Silver history, only affected partitions are reloaded and overwritten
 - Gold KPIs are recomputed only from the earliest affected date
-- Balances correctness (late events) with efficiency (avoiding full rewrites)
-- Handles late-arriving events via partition-level recompute
+- Handles late-arriving events without full table rewrites
+- Trades storage efficiency for correctness and simplicity
 
 ### 4. Event-Sourced State Reconstruction
 - Subscription state is derived from event history, not stored directly
@@ -96,22 +110,70 @@ The platform processes subscription lifecycle events through a layered medallion
 
 ### 5. Idempotent Processing via Event Deduplication
 - Duplicate events are removed using `event_id`
-- Guarantees safe reprocessing and retry behavior
+- Ensures idempotent processing and safe retries across pipeline runs
 
 ### 6. Batch-First, Streaming-Ready Design
 - Built with batch (Airflow + files) but mirrors streaming concepts
 - Designed for extension to Kafka/Spark without redesign
 
+### 7. Storage Abstraction for Environment-Agnostic Pipelines
+- Introduced a storage interface to decouple pipeline logic from underlying storage
+- Supports both local filesystem and S3 without changing transformation code
+- Enables seamless transition from local development to cloud data lake
 
-## Future Work
+### 8. Layered Data Validation
+- Validation is applied at each layer with increasing strictness
+- Bronze: schema enforcement and basic integrity checks
+- Silver: state correctness and historical consistency
+- Gold: business-level validation and cross-layer consistency checks
+  - Gold KPIs (e.g., active subscriptions, MRR) are validated against the Silver current snapshot
+  - Ensures aggregate metrics remain consistent with the underlying state
 
-### Phase 2 - Cloud & Data Quality
-- Migrate storage from local filesystem to AWS S3
-- Extend validation framework with schema enforcement and data quality monitoring
-- Add data quality checks and monitoring
 
-### Phase 3 - Streaming & Real-time Processing
-- Introduce Kafka-based event ingestion
-- Build streaming pipeline with Spark Structured Streaming
-- Transition to table formats like Apache Iceberg
-- Support real-time dashboards and near real-time analytics
+## Project Structure
+
+```text
+.
+├── .github/
+│   └── workflows/
+│       └── deploy-airflow.yml
+├── dags/
+├── docs/
+│   ├── architecture/
+│   └── reflections/
+├── infra/
+│   └── ansible/
+│       └── playbooks/
+│           ├── bootstrap.yml
+│           ├── deploy-airflow.yml
+│           └── init-airflow.yml
+├── src/
+│   ├── common/
+│   ├── gold/
+│   ├── ingestion/
+│   └── silver/
+├── tests/
+├── docker-compose.airflow.yml
+├── README.md
+└── requirements.txt
+```
+
+## Future Work for Phase 3
+
+### 1. Streaming Ingestion (Kafka)
+- Replace batch-based ingestion with real-time event streaming using Kafka
+- Introduce a consumer service to write events into the Bronze layer
+- Enable near real-time state updates while preserving the existing data model
+
+### 2. Distributed Processing (Spark)
+- Scale transformation logic using Spark for larger datasets
+- Maintain the same medallion structure while improving performance and parallelism
+
+### 3. Table Format Upgrade (Apache Iceberg)
+- Introduce Iceberg for efficient incremental updates and partition management
+- Reduce full partition rewrites and enable ACID-like guarantees on the data lake
+
+### 4. Observability & Data Applications (Grafana)
+- Integrate Grafana for monitoring pipeline health and data quality
+- Visualize key KPIs (e.g., MRR, active subscriptions) in real time
+- Add alerting for pipeline failures, data anomalies, and freshness issues
