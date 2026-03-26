@@ -1,17 +1,25 @@
+import pandas as pd
+import logging
+
 from src.gold.kpi_daily import (
     load_gold_inputs,
+    load_current_snapshot,
     get_affected_start_date,
     build_kpi_daily_df,
     write_kpi_daily_partitions,
-    validate_latest_kpi_with_current,
     update_gold_watermark,
 )
+from src.gold.validation import validate_gold_kpi_daily
 from src.silver.watermark import load_watermark
 from src.common.storage_factory import get_storage
 from src.common.constants import TEST_ROOT, DEFAULT_GOLD_KPI_DAILY_DIR
-import pandas as pd
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
 
+logger = logging.getLogger(__name__)
 
 PIPELINE_NAME = "test_gold_pipeline"
 
@@ -82,15 +90,42 @@ def main():
         print("No KPI rows. Exit.")
         return
 
+    affected_partitions = sorted(
+        pd.to_datetime(kpi_df["date"])
+        .dt.strftime("%Y-%m-%d")
+        .unique()
+        .tolist()
+    )
+    print(f"Affected partitions: {affected_partitions}")
+
     # 5. write partitions
     write_kpi_daily_partitions(kpi_df=kpi_df, storage=storage)
     print("Wrote gold kpi_daily partitions")
 
-    # 6. validate with silver current snapshot
-    validation_result = validate_latest_kpi_with_current(kpi_df=kpi_df, storage=storage)
-    print(f"Validation result: {validation_result}")
+    # 6. load current snapshot for validation
+    current_df = load_current_snapshot(storage=storage)
+    print(f"Loaded current snapshot rows: {len(current_df)}")
 
-    # 7. update watermark
+    # 7. validate
+    gold_validation = validate_gold_kpi_daily(
+        kpi_df=kpi_df,
+        current_df=current_df,
+        affected_partitions=affected_partitions,
+    )
+
+    logger.info(
+        "gold_kpi_validation_summary=%s",
+        gold_validation.log_summary(),
+    )
+
+    if not gold_validation.passed:
+        logger.error(
+            "gold_kpi_validation_failed_checks=%s",
+            gold_validation.failed_check_details(),
+        )
+        gold_validation.raise_if_failed()
+
+    # 8. update watermark
     update_gold_watermark(
         incremental_df=incremental_df,
         pipeline_name=PIPELINE_NAME,
@@ -104,7 +139,7 @@ def main():
 
     print("=== DONE ===")
 
-    # 8. load full gold table
+    # 9. load full gold table
     print_gold_kpi_daily()
 
 if __name__ == "__main__":

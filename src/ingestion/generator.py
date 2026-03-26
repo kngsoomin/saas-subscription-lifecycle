@@ -6,24 +6,19 @@ from dataclasses import dataclass, asdict
 from typing import Dict, List
 from uuid import uuid4
 
+from src.common.schema import (
+    PLAN_CATALOG,
+    PLAN_ORDER,
+    BRONZE_EVENT_SCHEMA_VERSION,
+    DEFAULT_EVENT_SOURCE,
+    DEFAULT_CURRENCY
+)
 from src.common.constants import (
     DEFAULT_GENERATOR_SEQ_PATH,
     DEFAULT_GENERATOR_STATE_CURRENT_PATH
 )
 from src.common.storage import LocalStorage, Storage
 
-
-PLAN_CATALOG = {
-    "basic_monthly": {"billing_cycle": "monthly", "price": 9.99},
-    "pro_monthly": {"billing_cycle": "monthly", "price": 29.99},
-    "enterprise_monthly": {"billing_cycle": "monthly", "price": 99.99},
-}
-
-PLAN_ORDER = ["basic_monthly", "pro_monthly", "enterprise_monthly"]
-
-SCHEMA_VERSION = "1.0"
-CURRENCY = "USD"
-SOURCE = "system"
 
 
 @dataclass
@@ -103,7 +98,7 @@ def build_event(
         "event_id": str(uuid4()),
         "event_time": format_utc_datetime(event_time),
         "event_type": event_type,
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": BRONZE_EVENT_SCHEMA_VERSION,
         "user_id": state.user_id,
         "subscription_id": state.subscription_id,
         "plan_id": state.plan_id,
@@ -111,7 +106,7 @@ def build_event(
         "price": state.price,
         "currency": state.currency,
         "status": state.status,
-        "source": SOURCE,
+        "source": DEFAULT_EVENT_SOURCE,
         "ingested_at": format_utc_datetime(ingested_at),
     }
 
@@ -195,7 +190,7 @@ def create_new_subscription(
         plan_id=plan_id,
         billing_cycle=PLAN_CATALOG[plan_id]["billing_cycle"],
         price=PLAN_CATALOG[plan_id]["price"],
-        currency=CURRENCY,
+        currency=DEFAULT_CURRENCY,
         status="active",
         last_event_time=format_utc_datetime(start_time),
     )

@@ -7,7 +7,7 @@ from src.silver.transform import load_history
 from src.silver.watermark import save_watermark
 from src.common.constants import (
     DEFAULT_SILVER_HISTORY_DIR,
-    DEFAULT_SILVER_CURRENT_PATH,
+    DEFAULT_SILVER_CURRENT_DIR,
     DEFAULT_GOLD_KPI_DAILY_DIR,
     DEFAULT_PIPELINE_STATE_DIR,
 )
@@ -48,6 +48,19 @@ def load_gold_inputs(
     )
 
     return history_df, incremental_df
+
+
+def load_current_snapshot(
+    base_dir: str = DEFAULT_SILVER_CURRENT_DIR,
+    storage: Storage | None = None,
+) -> pd.DataFrame:
+    storage = storage or LocalStorage()
+    path = storage.join(base_dir, "current.parquet")
+
+    if not storage.exists(path):
+        return pd.DataFrame()
+
+    return storage.read_parquet(path)
 
 
 def get_gold_incremental(
@@ -137,53 +150,6 @@ def write_kpi_daily_partitions(
 
         partition_df = pd.DataFrame([row])
         storage.write_parquet(out_path, partition_df)
-
-def validate_latest_kpi_with_current(
-    kpi_df: pd.DataFrame,
-    current_snapshot_path: str = DEFAULT_SILVER_CURRENT_PATH,
-    storage: Storage | None = None,
-) -> dict:
-    storage = storage or LocalStorage()
-    empty_result = {
-        "is_valid": True,
-        "checked": False,
-        "reason": "no_data",
-    }
-
-    if kpi_df.empty or (not storage.exists(current_snapshot_path)):
-        return empty_result
-
-    current_df = storage.read_parquet(current_snapshot_path)
-    if current_df.empty:
-        return empty_result
-
-    current_df["current_price"] = pd.to_numeric(
-        current_df["current_price"], errors="coerce"
-    ).fillna(0.0)
-
-    latest_kpi = kpi_df.sort_values("date").iloc[-1]
-
-    current_active_df = current_df[current_df["current_status"] == "active"]
-    current_active_count = int(current_active_df["subscription_id"].nunique())
-    current_mrr = round(float(current_active_df["current_price"].sum()), 2)
-
-    actual_active_count = int(latest_kpi["active_subscriptions"])
-    actual_mrr = round(float(latest_kpi["mrr"]), 2)
-
-    active_match = actual_active_count == current_active_count
-    mrr_match = actual_mrr == current_mrr
-
-    return {
-        "is_valid": active_match and mrr_match,
-        "checked": True,
-        "reason": None,
-        "active_subscriptions_match": active_match,
-        "mrr_match": mrr_match,
-        "expected_active_subscriptions": current_active_count,
-        "actual_active_subscriptions": actual_active_count,
-        "expected_mrr": current_mrr,
-        "actual_mrr": actual_mrr,
-    }
 
 
 def update_gold_watermark(

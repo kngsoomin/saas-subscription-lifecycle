@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pandas as pd
 import logging
 from datetime import datetime
 
@@ -8,12 +9,13 @@ from airflow.operators.python import PythonOperator
 
 from src.gold.kpi_daily import (
     load_gold_inputs,
+    load_current_snapshot,
     get_affected_start_date,
     build_kpi_daily_df,
     write_kpi_daily_partitions,
-    validate_latest_kpi_with_current,
     update_gold_watermark,
 )
+from src.gold.validation import validate_gold_kpi_daily
 from src.silver.watermark import load_watermark
 from src.common.storage_factory import get_storage
 from src.common.constants import GOLD_KPI_DAILY_DAG_ID
@@ -50,16 +52,36 @@ def update_gold_kpi_daily() -> None:
         logger.info("No KPI rows generated. Skipping write.")
         return
 
+    affected_partitions = sorted(
+        pd.to_datetime(kpi_df["date"])
+        .dt.strftime("%Y-%m-%d")
+        .unique()
+        .tolist()
+    )
+
     # write partitions (by event_time:dt)
     write_kpi_daily_partitions(kpi_df=kpi_df, storage=storage)
     logger.info("Wrote %s gold KPI rows", len(kpi_df))
 
-    # cross-check current snapshot and kpi table
-    validation_result = validate_latest_kpi_with_current(kpi_df=kpi_df, storage=storage)
-    logger.info("Gold validation result: %s", validation_result)
+    # validate
+    current_df = load_current_snapshot(storage=storage)
+    gold_validation = validate_gold_kpi_daily(
+        kpi_df=kpi_df,
+        current_df=current_df,
+        affected_partitions=affected_partitions,
+    )
 
-    if not validation_result["is_valid"]:
-        raise ValueError(f"Gold KPI daily validation failed: {validation_result}")
+    logger.info(
+        "gold_kpi_validation_summary=%s",
+        gold_validation.log_summary(),
+    )
+
+    if not gold_validation.passed:
+        logger.error(
+            "gold_kpi_validation_failed_checks=%s",
+            gold_validation.failed_check_details(),
+        )
+        gold_validation.raise_if_failed()
 
     # update watermark
     update_gold_watermark(
