@@ -25,10 +25,10 @@ with minimal changes to the core data model and storage layout.
 
 ![Data Flow](docs/architecture/data-flow-phase2.png)
 
-Originally built as a local batch pipeline (Phase 1), the system has evolved into an S3-backed data lake architecture (Phase 2).
+> Originally built as a local batch pipeline (Phase 1), the system has evolved into an S3-backed data lake architecture (Phase 2).
 
 
-### Data Flow (Phase 2)
+## Data Flow
 
 The platform processes subscription lifecycle events through a layered medallion architecture using an incremental, state-aware pipeline.
 
@@ -70,9 +70,11 @@ The platform processes subscription lifecycle events through a layered medallion
        - `mrr`: total MRR from subscriptions whose latest status is `active`
    - Results are stored as partitioned Parquet (`dt=YYYY-MM-DD`)
 
+
+## Development & Deployment
+
 ![Development & Deployment](docs/architecture/development-deployment-architecture.png)
 
-### Development & Deployment
 - **Code Versioning (GitHub)**
 - **CI/CD Pipeline (GitHub Actions)**
 - **Infrastructure (AWS EC2)**
@@ -92,39 +94,39 @@ The platform processes subscription lifecycle events through a layered medallion
 
 ## Key Decisions
 
-### 1. **A stateful event generator**
+#### 1. **A stateful event generator**
 - The event generator maintains lifecycle state and produces only allowed next actions
 - This moves beyond predefined test cases and helps uncover unexpected edge scenarios
 
-### 2. Incremental Processing via Watermarks
+#### 2. Incremental Processing via Watermarks
 - All layers process data incrementally using an `ingested_at` watermark
 - Bronze appends new events, while Silver and Gold selectively recompute affected data
 - Enables efficient updates without full recomputation
 
-### 3. Partition-Level Update & Partial Recompute
+#### 3. Partition-Level Update & Partial Recompute
 - To build Silver history, only affected partitions are reloaded and overwritten
 - Gold KPIs are recomputed only from the earliest affected date
 - Handles late-arriving events without full table rewrites
 - Trades storage efficiency for correctness and simplicity
 
-### 4. Event-Sourced State Reconstruction
+#### 4. Event-Sourced State Reconstruction
 - Subscription state is derived from event history, not stored directly
 - Ensures deterministic, reproducible state and supports late-arriving data
 
-### 5. Idempotent Processing via Event Deduplication
+#### 5. Idempotent Processing via Event Deduplication
 - Duplicate events are removed using `event_id`
 - Ensures idempotent processing and safe retries across pipeline runs
 
-### 6. Batch-First, Streaming-Ready Design
+#### 6. Batch-First, Streaming-Ready Design
 - Built with batch (Airflow + files) but mirrors streaming concepts
 - Designed for extension to Kafka/Spark without redesign
 
-### 7. Storage Abstraction for Environment-Agnostic Pipelines
+#### 7. Storage Abstraction for Environment-Agnostic Pipelines
 - Introduced a storage interface to decouple pipeline logic from underlying storage
 - Supports both local filesystem and S3 without changing transformation code
 - Enables seamless transition from local development to cloud data lake
 
-### 8. Layered Data Validation
+#### 8. Layered Data Validation
 - Validation is applied at each layer with increasing strictness
 - Bronze: schema enforcement and basic integrity checks
 - Silver: state correctness and historical consistency
@@ -163,20 +165,20 @@ The platform processes subscription lifecycle events through a layered medallion
 
 ## Future Work for Phase 3
 
-### 1. Streaming Ingestion (Kafka)
+#### 1. Streaming Ingestion (Kafka)
 - Replace batch-based ingestion with real-time event streaming using Kafka
 - Introduce a consumer service to write events into the Bronze layer
 - Enable near real-time state updates while preserving the existing data model
 
-### 2. Distributed Processing (Spark)
+#### 2. Distributed Processing (Spark)
 - Scale transformation logic using Spark for larger datasets
 - Maintain the same medallion structure while improving performance and parallelism
 
-### 3. Table Format Upgrade (Apache Iceberg)
+#### 3. Table Format Upgrade (Apache Iceberg)
 - Introduce Iceberg for efficient incremental updates and partition management
 - Reduce full partition rewrites and enable ACID-like guarantees on the data lake
 
-### 4. Observability & Data Applications (Grafana)
+#### 4. Observability & Data Applications (Grafana)
 - Integrate Grafana for monitoring pipeline health and data quality
 - Visualize key KPIs (e.g., MRR, active subscriptions) in real time
 - Add alerting for pipeline failures, data anomalies, and freshness issues
