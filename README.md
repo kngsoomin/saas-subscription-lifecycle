@@ -24,7 +24,9 @@ with minimal changes to the core data model and storage layout.
 ## Architecture Overview
 
 ![Data Flow](docs/architecture/data-flow-phase2.png)
+
 Originally built as a local batch pipeline (Phase 1), the system has evolved into an S3-backed data lake architecture (Phase 2).
+
 
 ### Data Flow (Phase 2)
 
