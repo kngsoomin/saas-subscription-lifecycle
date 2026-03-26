@@ -47,13 +47,13 @@ The platform processes subscription lifecycle events through a layered medallion
          - Events are transformed into a canonical subscription state history
          - Deduplicated using `event_id` for idempotency
          - State is reconstructed using `event_time` and `ingested_at`
-         - Data is stored as **partitioned Parquet files (`dt=YYYY-MM-DD`, event date)**
-         - Only **affected partitions are re-written**
+         - Data is stored as partitioned Parquet files (`dt=YYYY-MM-DD`, event date)
+         - Only affected partitions are re-written
          - State validation ensures ordering and consistency
        - Silver Current
          - Latest subscription snapshot derived from full history
          - One record per `subscription_id`
-         - Represents the **current state of all subscriptions**
+         - Represents the current state of all subscriptions
 5. **Serving (Gold Layer)**
    - Daily KPIs are derived from event-driven state reconstruction (history table)
 
