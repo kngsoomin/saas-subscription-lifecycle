@@ -1,11 +1,6 @@
 # SaaS Subscription Lifecycle Data Platform
 
-This project builds an event-driven data platform that models subscription lifecycle events,
-stores them in an S3-backed medallion data lake, and incrementally transforms them into reliable analytical datasets.
-
-It starts as a batch-based pipeline orchestrated with Airflow 
-and is designed to evolve into a real-time streaming system using Kafka and Spark,
-with minimal changes to the core data model and storage layout.
+This project builds a data platform that processes subscription lifecycle events in batch, stores them in an S3-backed medallion data lake, and incrementally transforms them into reliable analytical datasets. The pipeline is orchestrated with Airflow and designed to evolve into a real-time streaming system using Kafka and Spark with minimal changes to the core data model and storage layout.
 
 
 ## Key Features
