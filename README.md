@@ -1,179 +1,233 @@
-# SaaS Subscription Lifecycle Data Platform
+# Designing a Reliable Data Platform for Subscription Lifecycle Events
 
-This project builds a data platform that processes subscription lifecycle events in batch, stores them in an S3-backed medallion data lake, and incrementally transforms them into reliable analytical datasets. The pipeline is orchestrated with Airflow and designed to evolve into a real-time streaming system using Kafka and Spark with minimal changes to the core data model and storage layout.
+How do you build a reliable data platform for systems where state is not stored, but derived from events?
 
+Subscription systems are inherently event-driven. The current state of a subscription is not stored directly, but reconstructed from a sequence of events such as creations, renewals, upgrades, and cancellations. In practice, this introduces challenges such as late-arriving data and the need for deterministic state reconstruction.
 
-## Key Features
+This project builds a data platform that models subscription lifecycle events, stores them as immutable data in a medallion architecture, and reconstructs state through incremental processing. The system is designed for correctness, idempotency, and reproducibility, and is structured to evolve from batch processing with Airflow to real-time streaming with Kafka and Spark.
 
-- Stateful event generator for realistic lifecycle simulation
-- Incremental processing using `ingested_at` watermarks
-- Partition-aware recomputation for late-arriving events
-- Event-sourced state reconstruction (history → current snapshot)
-- Idempotent processing via event deduplication (`event_id`)
-- S3-backed data lake with environment-agnostic storage abstraction
-- Layered data validation across Bronze, Silver, and Gold
-- Cross-layer consistency checks between KPIs and reconstructed state
-- Designed for batch-first execution with a clear path to streaming (Kafka/Spark)
+## System Design
 
+### Design Principles
 
-## Architecture Overview
+* **Event-based immutable design**
+
+  Events are treated as immutable facts and serve as the source of truth, with state derived from event history rather than stored directly. This enables replayability, traceability, and simpler reasoning about state.
+
+* **Correctness through recomputation**
+
+  State is reconstructed from event history rather than incrementally updated, ensuring deterministic results even with late-arriving data.
+
+* **Idempotent processing**
+
+  Transformations are idempotent, guaranteeing consistent outputs across retries and backfills.
+
+* **Separation of storage and compute**
+
+  Storage is abstracted from compute, allowing the same pipeline to run across environments.
+
+* **Designed for batch-to-stream evolution**
+
+  The system starts with batch processing but is structured to evolve naturally into streaming.
+
+### Architecture
 
 ![Data Flow](docs/architecture/data-flow-phase2.png)
 
-> Originally built as a local batch pipeline (Phase 1), the system has evolved into an S3-backed data lake architecture (Phase 2).
+The system separates orchestration, storage, and transformation concerns:
+
+* **Orchestration (Airflow)**
+
+  Handles scheduling, dependency management, retries, and execution state.
+
+* **Storage (S3-backed data lake)**
+
+  Implements a medallion architecture:
+
+  * Bronze: append-only raw events
+  * Silver: reconstructed history and current state
+  * Gold: analytical datasets
+
+* **Transformation (Compute layer)**
+
+  Stateless jobs decoupled from orchestration, enabling portability and reuse.
+
+* **Storage abstraction**
+
+  A unified interface allows the same pipeline logic to run on local filesystem and S3.
 
 
-## Data Flow
+### Key Decisions
 
-The platform processes subscription lifecycle events through a layered medallion architecture using an incremental, state-aware pipeline.
+* **Append-only event storage**
+  
+  Events are written as append-only JSONL files in the Bronze layer, with no in-place updates or deletions.
+  This preserves the full event history and simplifies replay, debugging, and downstream recomputation.
 
-1. **Source (Event Generation)**
-   - Mock event generator simulates subscription lifecycle events
-2. **Ingestion (Airflow)**
-   - Events are written to Bronze layer as JSONL files
-   - Partitioned by ingestion date (`dt=YYYY-MM-DD`)
-3. **Storage (S3 Data Lake)**
-   - Data is stored in an S3-backed object storage system
-   - A storage abstraction layer allows seamless switching between local filesystem and S3
-4. **Processing (Airflow)**
-   - Incremental Bronze → Silver transformation using `ingested_at` watermark
-     - Builds:
-       - Silver History
-         - Events are transformed into a canonical subscription state history
-         - Deduplicated using `event_id` for idempotency
-         - State is reconstructed using `event_time` and `ingested_at`
-         - Data is stored as partitioned Parquet files (`dt=YYYY-MM-DD`, event date)
-         - Only affected partitions are re-written
-         - State validation ensures ordering and consistency
-       - Silver Current
-         - Latest subscription snapshot derived from full history
-         - One record per `subscription_id`
-         - Represents the current state of all subscriptions
-5. **Serving (Gold Layer)**
-   - Daily KPIs are derived from event-driven state reconstruction (history table)
+* **State reconstruction from event history**
+  
+  Instead of maintaining mutable state, subscription state is fully reconstructed from the event log in the Silver layer.
+  A complete history (`subscription_state_history`) is first built, and the latest state (`subscription_state_current`) is derived from it.
+  This ensures deterministic results even with late-arriving data, and allows the system to operate reliably on object storage without relying on ACID guarantees.
 
-   - Incremental logic:
-     - New data is detected via `ingested_at` watermark
-     - The earliest affected `event_date` is identified
-     - KPIs are recomputed **only from that date onward**
-   - Metrics are categorized into:
-     - **Flow metrics (event counts)**:
-       - `new_subscriptions`: daily count of `subscription_created` events
-       - `new_cancellations`: daily count of `subscription_cancelled` events
-     - **Stock metrics (state snapshot as of end-of-day)**:
-       - `active_subscriptions`: count of subscriptions whose latest status is `active`
-       - `mrr`: total MRR from subscriptions whose latest status is `active`
-   - Results are stored as partitioned Parquet (`dt=YYYY-MM-DD`)
+* **Partition-aware recomputation**
+  
+  When new events are identified via the `ingested_at` watermark, affected partitions are determined based on `event_time`, and only those partitions are recomputed.
+  This balances correctness with efficiency while avoiding complex in-place update logic.
+
+* **Idempotent processing via event deduplication**
+  
+  All transformations are designed to be idempotent by deduplicating events using a unique `event_id`.
+  This guarantees consistent outputs across retries, backfills, and partial failures.
+
+* **Storage-agnostic pipeline design**
+  
+  All data access is abstracted through a storage interface, allowing the same pipeline logic to run on both local filesystem and S3.
+  This removes environment-specific branching and simplifies deployment.
 
 
-## Development & Deployment
+## Data Flow & Modeling
+
+### Data Flow
+
+The pipeline follows a medallion architecture (Bronze → Silver → Gold):
+
+1. **Event ingestion (Bronze)**  
+
+   A stateful generator produces lifecycle events, stored as append-only data.
+
+2. **State reconstruction (Silver)**
+   
+   - Full history (`subscription_state_history`)  
+   - Current snapshot (`subscription_state_current`)  
+
+3. **Analytical modeling (Gold)**
+   
+   Daily KPIs (new subscriptions, cancellations, active subscriptions, MRR) are derived from reconstructed state.
+
+The system maintains correctness through incremental processing and selective recomputation, rather than in-place updates.
+
+### Data Models
+
+#### Bronze — Immutable event log
+
+Stores raw lifecycle events as append-only JSONL records:
+
+* `subscription_created`
+* `subscription_renewed`
+* `subscription_upgraded`
+* `subscription_downgraded`
+* `subscription_cancelled`
+* `payment_failed`
+
+#### Silver — Reconstructed state
+
+* `subscription_state_history`
+  : Full event history ordered by `event_time` and `ingested_at`
+
+* `subscription_state_current`
+  : Latest state per subscription derived from history
+
+Separates **historical truth** from **current-state convenience**.
+
+#### Gold — Analytical models
+
+* **kpi_daily**
+
+Captures:
+
+* Flow metrics: new subscriptions, cancellations
+* Stock metrics: active subscriptions, MRR
+
+Derived from reconstructed state to ensure analytical consistency.
+
+## Implementation Details
+
+* **Stateful event simulation**
+  
+  A stateful event generator simulates subscription lifecycles by producing event sequences based on valid state transitions.
+  Instead of relying on predefined test cases, it generates diverse and unpredictable scenarios, allowing the system to encounter edge cases and "unknown unknowns" during development.
+  This approach improves robustness by validating the pipeline against realistic and evolving data patterns.
+
+* **Incremental processing with late-arriving data handling**
+  
+  Processing is driven by an `ingested_at` watermark, which defines the set of newly arrived events.
+  Affected partitions are determined using `event_time`, and only those partitions are recomputed, ensuring correctness even with late-arriving data.
+
+* **Layered validation and cross-layer consistency enforcement**
+  
+  Validation is performed at each layer (Bronze, Silver, Gold) to ensure data integrity at different stages of the pipeline.
+  At the Gold layer, derived KPIs are cross-checked against the reconstructed state in the Silver layer, ensuring consistency between aggregated metrics and underlying state.
+
+## Infrastructure & Deployment
 
 ![Development & Deployment](docs/architecture/development-deployment-architecture.png)
 
-- **Code Versioning (GitHub)**
-- **CI/CD Pipeline (GitHub Actions)**
-- **Infrastructure (AWS EC2)**
-  - Compute layer hosting the data platform
-  - Attached IAM role for secure S3 access
-- **Storage (AWS S3)**
-  - Data lake for Bronze, Silver, and Gold layers
-- **Networking**
-  - Elastic IP for stable public access to Airflow UI
-- **Configuration (Ansible)**
-  - Provision EC2 instance
-  - Install Docker and dependencies 
-  - Deploy Airflow environment
-- **Runtime (Dockerized Airflow)**
-  - Orchestrates data pipelines
+The platform is deployed on AWS with a containerized Airflow setup and automated infrastructure provisioning.
+
+### Infrastructure
+
+- **Compute (EC2)** - Hosts the Airflow environment and pipeline execution, IAM role attached for secure S3 access  
+- **Storage (S3)** - Data lake for Bronze, Silver, and Gold layers  
+- **Networking** - Elastic IP for stable access to Airflow UI  
+
+### Orchestration & Runtime
+
+- **Airflow (Dockerized)** - Orchestrates end-to-end pipeline execution  
+- **Configuration (Ansible)** - Automates provisioning, dependency setup, and deployment  
+
+### CI/CD
+
+- **GitHub** - Source control  
+- **GitHub Actions**  - Automated deployment to EC2  
 
 
-## Key Decisions
+## Limitations & Future Work
 
-#### 1. **A stateful event generator**
-- The event generator maintains lifecycle state and produces only allowed next actions
-- This moves beyond predefined test cases and helps uncover unexpected edge scenarios
+### Limitations
 
-#### 2. Incremental Processing via Watermarks
-- All layers process data incrementally using an `ingested_at` watermark
-- Bronze appends new events, while Silver and Gold selectively recompute affected data
-- Enables efficient updates without full recomputation
+* **Recomputation and storage cost**
+  
+  Recomputing partitions ensures correctness but increases compute cost as data grows.
+  Append-only design leads to continuous data growth over time.
 
-#### 3. Partition-Level Update & Partial Recompute
-- To build Silver history, only affected partitions are reloaded and overwritten
-- Gold KPIs are recomputed only from the earliest affected date
-- Handles late-arriving events without full table rewrites
-- Trades storage efficiency for correctness and simplicity
+* **Batch execution**
+  
+  The system currently runs in batch mode, with streaming planned as a future extension.
 
-#### 4. Event-Sourced State Reconstruction
-- Subscription state is derived from event history, not stored directly
-- Ensures deterministic, reproducible state and supports late-arriving data
+### Future Work
 
-#### 5. Idempotent Processing via Event Deduplication
-- Duplicate events are removed using `event_id`
-- Ensures idempotent processing and safe retries across pipeline runs
+* **Streaming ingestion (Kafka)**
+  : Replace batch ingestion with real-time event streaming
 
-#### 6. Batch-First, Streaming-Ready Design
-- Built with batch (Airflow + files) but mirrors streaming concepts
-- Designed for extension to Kafka/Spark without redesign
+* **Distributed processing (Spark)**
+  : Scale transformations for larger datasets
 
-#### 7. Storage Abstraction for Environment-Agnostic Pipelines
-- Introduced a storage interface to decouple pipeline logic from underlying storage
-- Supports both local filesystem and S3 without changing transformation code
-- Enables seamless transition from local development to cloud data lake
+* **Table format upgrade (Iceberg)**
+  : Enable efficient updates and ACID-like guarantees
 
-#### 8. Layered Data Validation
-- Validation is applied at each layer with increasing strictness
-- Bronze: schema enforcement and basic integrity checks
-- Silver: state correctness and historical consistency
-- Gold: business-level validation and cross-layer consistency checks
-  - Gold KPIs (e.g., active subscriptions, MRR) are validated against the Silver current snapshot
-  - Ensures aggregate metrics remain consistent with the underlying state
+* **Observability (Grafana)**
+  : Add monitoring, dashboards, and alerting
 
 
 ## Project Structure
 
 ```text
 .
-├── .github/
-│   └── workflows/
-│       └── deploy-airflow.yml
+├── .github/workflows/
 ├── dags/
 ├── docs/
 │   ├── architecture/
 │   └── reflections/
-├── infra/
-│   └── ansible/
-│       └── playbooks/
-│           ├── bootstrap.yml
-│           ├── deploy-airflow.yml
-│           └── init-airflow.yml
+├── infra/ansible/playbooks/
 ├── src/
 │   ├── common/
-│   ├── gold/
 │   ├── ingestion/
-│   └── silver/
+│   ├── silver/
+│   └── gold/
 ├── tests/
 ├── docker-compose.airflow.yml
 ├── README.md
 └── requirements.txt
 ```
 
-## Future Work for Phase 3
-
-#### 1. Streaming Ingestion (Kafka)
-- Replace batch-based ingestion with real-time event streaming using Kafka
-- Introduce a consumer service to write events into the Bronze layer
-- Enable near real-time state updates while preserving the existing data model
-
-#### 2. Distributed Processing (Spark)
-- Scale transformation logic using Spark for larger datasets
-- Maintain the same medallion structure while improving performance and parallelism
-
-#### 3. Table Format Upgrade (Apache Iceberg)
-- Introduce Iceberg for efficient incremental updates and partition management
-- Reduce full partition rewrites and enable ACID-like guarantees on the data lake
-
-#### 4. Observability & Data Applications (Grafana)
-- Integrate Grafana for monitoring pipeline health and data quality
-- Visualize key KPIs (e.g., MRR, active subscriptions) in real time
-- Add alerting for pipeline failures, data anomalies, and freshness issues
