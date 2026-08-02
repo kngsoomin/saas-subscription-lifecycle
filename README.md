@@ -1,6 +1,6 @@
 # Designing a Reliable Data Platform for Subscription Lifecycle Events
 
-Subscription systems are inherently event-driven. The current state of a subscription is not stored directly, but reconstructed from a sequence of events such as creations, renewals, upgrades, and cancellations. The core engineering question is: given a continuous stream of events that may arrive out of order, how do you build a pipeline that always produces a correct and consistent view of the current state?
+Subscription systems are inherently event-based. The current state of a subscription is not stored directly, but reconstructed from a sequence of events such as creations, renewals, upgrades, and cancellations. The core engineering question is: given a continuous stream of events that may arrive out of order, how do you build a pipeline that always produces a correct and consistent view of the current state?
 
 This project builds a data platform that models subscription lifecycle events, stores them as immutable data in a medallion architecture, and reconstructs state through incremental processing. It is built with Python, Airflow, and AWS S3, deployed on EC2 via Ansible and GitHub Actions, and structured to evolve from batch processing to real-time streaming with Kafka and Spark.
 
